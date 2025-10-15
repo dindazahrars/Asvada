@@ -1,103 +1,211 @@
-import Image from "next/image";
+'use client';
+
+import { useState, useEffect } from 'react';
+import { useSession, signOut } from 'next-auth/react';
+import HeroSection from '@/components/HeroSection';
+import LoginModal from '@/components/LoginModal';
+import SearchLimitBanner from '@/components/SearchLimitBanner';
+import Sidebar from '@/components/Sidebar';
+import RecommendedSection from '@/components/RecommendedSection';
+import Footer from '@/components/Footer';
+import { LogOut, User, Menu, Bell } from 'lucide-react';
+import Image from 'next/image';
 
 export default function Home() {
-  return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const { data: session, status } = useSession();
+  const [searchCount, setSearchCount] = useState(0);
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  
+  const MAX_FREE_SEARCHES = 3;
+  const isLoggedIn = status === 'authenticated';
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+  // Load search count from localStorage (only for guests)
+  useEffect(() => {
+    if (!isLoggedIn) {
+      const saved = localStorage.getItem('guestSearchCount');
+      if (saved) {
+        const count = parseInt(saved, 10) || 0;
+        console.log('🔍 Loaded searchCount:', count);
+        setSearchCount(count);
+      }
+    } else {
+      // Reset counter when logged in
+      setSearchCount(0);
+      localStorage.removeItem('guestSearchCount');
+    }
+  }, [isLoggedIn]);
+
+  // Save search count to localStorage (only for guests)
+  useEffect(() => {
+    if (!isLoggedIn && searchCount > 0) {
+      console.log('💾 Saving searchCount:', searchCount);
+      localStorage.setItem('guestSearchCount', searchCount.toString());
+    }
+  }, [searchCount, isLoggedIn]);
+
+  const handleSearch = (query: string, filters?: Record<string, string[]>) => {
+    console.log('🔎 Search triggered. Current count:', searchCount);
+
+    // If logged in, unlimited search
+    if (isLoggedIn) {
+      console.log('✅ Logged in - Unlimited search');
+      console.log('Search:', query, 'Filters:', filters);
+      // TODO: Implement actual search logic here
+      return;
+    }
+
+    // Check if limit reached
+    if (searchCount >= MAX_FREE_SEARCHES) {
+      console.log('⛔ Limit reached! Opening modal...');
+      setShowLoginModal(true);
+      return;
+    }
+
+    // Increment search count
+    const newCount = searchCount + 1;
+    console.log('➕ Incrementing count to:', newCount);
+    setSearchCount(newCount);
+
+    // Perform search
+    console.log('✅ Search query:', query);
+    console.log('✅ Filters:', filters);
+    // TODO: Implement actual search logic here
+
+    // Show modal if limit reached after this search
+    if (newCount >= MAX_FREE_SEARCHES) {
+      setTimeout(() => {
+        console.log('⚠️ Limit reached after search. Opening modal...');
+        setShowLoginModal(true);
+      }, 500);
+    }
+  };
+
+  const searchesLeft = MAX_FREE_SEARCHES - searchCount;
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-amber-50">
+      {/* Header */}
+      <header className="fixed top-0 left-0 right-0 bg-white/90 backdrop-blur-md shadow-sm z-50">
+        <div className="container mx-auto px-4 py-3 flex items-center justify-between">
+          {/* Left: Menu + Logo */}
+          <div className="flex items-center gap-3">
+            {/* Menu Button */}
+            <button
+              onClick={() => setIsSidebarOpen(true)}
+              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              aria-label="Open menu"
+            >
+              <Menu className="w-6 h-6 text-gray-700" />
+            </button>
+
+            {/* Logo */}
+            <div className="flex items-center gap-2">
+              
+              <span className="text-xl font-bold bg-gradient-to-r from-orange-600 to-amber-600 bg-clip-text text-transparent">
+                Asvada
+              </span>
+            </div>
+          </div>
+
+          {/* Right: User Profile / Login */}
+          <div className="flex items-center gap-3">
+            {isLoggedIn && session?.user ? (
+              <>
+                {/* Notification Bell */}
+                <button
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors relative"
+                  aria-label="Notifications"
+                >
+                  <Bell className="w-5 h-5 text-gray-600" />
+                  <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
+                </button>
+
+                {/* User Profile */}
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2">
+                    {session.user.image ? (
+                      <Image
+                        src={session.user.image}
+                        alt={session.user.name || 'User'}
+                        width={32}
+                        height={32}
+                        className="rounded-full ring-2 ring-orange-200"
+                      />
+                    ) : (
+                      <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-amber-600 rounded-full flex items-center justify-center shadow-md">
+                        <User className="w-5 h-5 text-white" />
+                      </div>
+                    )}
+                    <div className="hidden sm:block">
+                      <p className="text-sm font-semibold text-gray-800">
+                        {session.user.name || 'User'}
+                      </p>
+                      <p className="text-xs text-green-600 font-medium">
+                        ✨ Unlimited Search
+                      </p>
+                    </div>
+                  </div>
+                  
+                  {/* Logout Button */}
+                  <button
+                    onClick={() => signOut()}
+                    className="p-2 hover:bg-red-50 rounded-lg transition-colors group"
+                    title="Logout"
+                    aria-label="Logout"
+                  >
+                    <LogOut className="w-5 h-5 text-gray-600 group-hover:text-red-600 transition-colors" />
+                  </button>
+                </div>
+              </>
+            ) : (
+              <button
+                onClick={() => setShowLoginModal(true)}
+                className="px-5 py-2 bg-gradient-to-r from-orange-500 to-amber-600 text-white font-semibold rounded-lg hover:from-orange-600 hover:to-amber-700 transition-all shadow-md hover:shadow-lg transform hover:scale-105"
+              >
+                Login
+              </button>
+            )}
+          </div>
         </div>
+      </header>
+
+      {/* Sidebar */}
+      <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
+
+      {/* Main Content */}
+      <main className="pt-20">
+        {/* Search Limit Banner (only for guests when searches left <= 1) */}
+        {!isLoggedIn && searchesLeft <= 1 && searchCount > 0 && (
+          <SearchLimitBanner 
+            searchesLeft={searchesLeft}
+            maxSearches={MAX_FREE_SEARCHES}
+            onLoginClick={() => setShowLoginModal(true)}
+          />
+        )}
+
+        {/* Hero Section */}
+        <HeroSection 
+          onSearch={handleSearch}
+          searchCount={searchCount}
+          maxSearches={MAX_FREE_SEARCHES}
+          isLoggedIn={isLoggedIn}
+        />
+
+        {/* Recommended Section */}
+        <RecommendedSection />
       </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+
+      {/* Footer */}
+      <Footer />
+
+      {/* Login Modal */}
+      <LoginModal 
+        isOpen={showLoginModal}
+        onClose={() => setShowLoginModal(false)}
+        searchCount={searchCount}
+        maxSearches={MAX_FREE_SEARCHES}
+      />
     </div>
   );
 }
