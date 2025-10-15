@@ -16,6 +16,7 @@ export default function Home() {
   const [searchCount, setSearchCount] = useState(0);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [ searchData, setSearchData ] = useState({});
   
   const MAX_FREE_SEARCHES = 3;
   const isLoggedIn = status === 'authenticated';
@@ -190,10 +191,11 @@ export default function Home() {
           searchCount={searchCount}
           maxSearches={MAX_FREE_SEARCHES}
           isLoggedIn={isLoggedIn}
+		  searchData={setSearchData}
         />
 
         {/* Recommended Section */}
-        <RecommendedSection />
+        <RecommendedSection searchData={searchData}/>
       </main>
 
       {/* Footer */}
