@@ -6,10 +6,11 @@ import { useState } from 'react';
 
 interface SearchLimitBannerProps {
   searchesLeft: number;
+  maxSearches: number; 
   onLoginClick: () => void;
 }
 
-const SearchLimitBanner = ({ searchesLeft, onLoginClick }: SearchLimitBannerProps) => {
+const SearchLimitBanner = ({ searchesLeft, maxSearches, onLoginClick }: SearchLimitBannerProps) => {
   const [isVisible, setIsVisible] = useState(true);
 
   console.log('🚨 Banner render:', { searchesLeft, isVisible });
@@ -33,7 +34,7 @@ const SearchLimitBanner = ({ searchesLeft, onLoginClick }: SearchLimitBannerProp
           <p className="font-semibold">
             {searchesLeft === 0 
               ? 'Pencarian gratis habis!' 
-              : `Sisa ${searchesLeft} pencarian!`
+              : `Sisa ${searchesLeft} dari ${maxSearches} pencarian gratis.`
             }
           </p>
           <p className="text-sm opacity-90">

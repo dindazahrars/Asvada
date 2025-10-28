@@ -47,7 +47,7 @@ const ResultsSection = ({ recipes, searchQuery }: ResultsSectionProps) => {
         <p className="text-gray-600">
           Ditemukan <span className="font-semibold text-[#902E2B]">{recipes.length}</span> resep
           {searchQuery && (
-            <span> untuk "{searchQuery}"</span>
+            <span> untuk  &quot;{searchQuery}&quot;</span>
           )}
         </p>
       </div>
