@@ -14,14 +14,14 @@ interface AppLayoutProps {
   children: ReactNode;
   showLoginModal?: boolean;
   setShowLoginModal?: (show: boolean) => void;
-  showCreateButton?: boolean; // ← Tambahkan prop
+  showCreateButton?: boolean;
 }
 
 export default function AppLayout({ 
   children, 
   showLoginModal = false, 
   setShowLoginModal,
-  showCreateButton = false // ← Default false
+  showCreateButton = false
 }: AppLayoutProps) {
   const { data: session, status } = useSession();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -58,7 +58,7 @@ export default function AppLayout({
                 {/* Create Recipe Button - Conditional */}
                 {showCreateButton && (
                   <button
-                    onClick={() => router.push('/create-recipe')}
+                    onClick={() => router.push('/recipes/create=')}
                     className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-full hover:from-blue-600 hover:to-purple-700 transition-all shadow-md hover:shadow-lg transform hover:scale-105 font-medium"
                   >
                     <Plus className="w-5 h-5" />

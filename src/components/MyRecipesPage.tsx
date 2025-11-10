@@ -4,9 +4,11 @@ import { useSession } from 'next-auth/react';
 import { useState } from 'react';
 import { Plus, BookOpen, Edit, Trash2, Eye } from 'lucide-react';
 import Image from 'next/image';
+import { useRouter } from 'next/navigation'; // Tambahkan ini
 
 export default function MyRecipesPage() {
   const { data: session } = useSession();
+  const router = useRouter(); // Tambahkan ini
   const [recipes, setRecipes] = useState([
     {
       id: '1',
@@ -31,7 +33,10 @@ export default function MyRecipesPage() {
             <p className="text-gray-500 mb-6">
               Mulai berbagi resep favoritmu dengan dunia
             </p>
-            <button className="inline-flex items-center gap-2 bg-blue-500 text-white px-6 py-3 rounded-full hover:bg-blue-600 transition">
+            <button 
+              onClick={() => router.push('/recipes/create')} 
+              className="inline-flex items-center gap-2 bg-blue-500 text-white px-6 py-3 rounded-full hover:bg-blue-600 transition"
+            >
               <Plus className="w-5 h-5" />
               Buat Resep Pertama
             </button>
