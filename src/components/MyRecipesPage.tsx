@@ -1,4 +1,3 @@
-// components/MyRecipesPage.tsx
 'use client';
 
 import { useSession } from 'next-auth/react';
@@ -17,30 +16,10 @@ export default function MyRecipesPage() {
       views: 245,
       createdAt: '2025-01-15',
     },
-    // Tambahkan data dummy lainnya
   ]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
-      {/* Header */}
-      <div className="bg-white border-b sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 py-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <BookOpen className="w-8 h-8 text-blue-500" />
-              <div>
-                <h1 className="text-3xl font-bold text-gray-900">Resep Saya</h1>
-                <p className="text-gray-600">{recipes.length} resep dibuat</p>
-              </div>
-            </div>
-            <button className="flex items-center gap-2 bg-blue-500 text-white px-6 py-3 rounded-full hover:bg-blue-600 transition">
-              <Plus className="w-5 h-5" />
-              Buat Resep Baru
-            </button>
-          </div>
-        </div>
-      </div>
-
+    <div className="min-h-screen">
       {/* Content */}
       <div className="max-w-7xl mx-auto px-4 py-8">
         {recipes.length === 0 ? (
@@ -62,10 +41,10 @@ export default function MyRecipesPage() {
             {recipes.map((recipe) => (
               <div
                 key={recipe.id}
-                className="bg-white rounded-2xl shadow-md p-6 hover:shadow-lg transition"
+                className="bg-white rounded-2xl shadow-md p-6 hover:shadow-lg transition border border-gray-100"
               >
                 <div className="flex items-center gap-6">
-                  <div className="relative w-32 h-32 rounded-xl overflow-hidden flex-shrink-0">
+                  <div className="relative w-32 h-32 rounded-xl overflow-hidden flex-shrink-0 bg-gray-100">
                     <Image
                       src={recipe.image}
                       alt={recipe.title}
@@ -84,7 +63,7 @@ export default function MyRecipesPage() {
                       </span>
                       <span>Dibuat: {recipe.createdAt}</span>
                       <span
-                        className={`px-3 py-1 rounded-full text-xs ${
+                        className={`px-3 py-1 rounded-full text-xs font-semibold ${
                           recipe.status === 'published'
                             ? 'bg-green-100 text-green-700'
                             : 'bg-yellow-100 text-yellow-700'
@@ -94,11 +73,11 @@ export default function MyRecipesPage() {
                       </span>
                     </div>
                     <div className="flex gap-2">
-                      <button className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition">
+                      <button className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition font-medium">
                         <Edit className="w-4 h-4" />
                         Edit
                       </button>
-                      <button className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition">
+                      <button className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition font-medium">
                         <Trash2 className="w-4 h-4" />
                         Hapus
                       </button>

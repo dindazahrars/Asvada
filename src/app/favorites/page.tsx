@@ -1,10 +1,33 @@
+// app/favorites/page.tsx
+'use client';
+
+import AppLayout from '@/components/AppLayout';
 import FavoritesPage from '@/components/FavoritePage';
+import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
+import { useEffect } from 'react';
 
-export const metadata = {
-  title: 'Resep Favorit | Asvada',
-  description: 'Koleksi resep favorit Anda',
-};
+export default function FavoritesRoute() {
+  const { data: session, status } = useSession();
+  const router = useRouter();
 
-export default function Favorites() {
-  return <FavoritesPage />;
+  useEffect(() => {
+    if (status === 'unauthenticated') {
+      router.push('/');
+    }
+  }, [status, router]);
+
+  if (status === 'loading') {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
+      </div>
+    );
+  }
+
+  return (
+    <AppLayout>
+      <FavoritesPage />
+    </AppLayout>
+  );
 }
