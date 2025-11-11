@@ -101,11 +101,14 @@ export default function Home() {
             </button>
 
             {/* Logo */}
-            <div className="flex items-center gap-2">
-              
-              <span className="text-xl font-bold bg-gradient-to-r from-orange-600 to-amber-600 bg-clip-text text-transparent">
-                Asvada
-              </span>
+            <div className="flex items-center gap-4">
+              <Image
+                  src="/logo.png" 
+                  alt="Asvada Logo"
+                  width={120}
+                  height={120}
+                  priority
+                />
             </div>
           </div>
 
@@ -113,14 +116,6 @@ export default function Home() {
           <div className="flex items-center gap-3">
             {isLoggedIn && session?.user ? (
               <>
-                {/* Notification Bell */}
-                <button
-                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors relative"
-                  aria-label="Notifications"
-                >
-                  <Bell className="w-5 h-5 text-gray-600" />
-                  <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
-                </button>
 
                 {/* User Profile */}
                 <div className="flex items-center gap-3">

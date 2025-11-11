@@ -47,11 +47,17 @@ const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
             {/* Header */}
             <div className="flex items-center justify-between p-6 border-b border-gray-100 shrink-0">
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-amber-600 rounded-lg flex items-center justify-center shadow-md">
-                  <span className="text-white font-bold text-sm">A</span>
+                <div className="w-8 h-8 bg-gradient-to-br from-white-500 to-whitw-600 rounded-lg flex items-center justify-center ">
+                  <span className="text-white font-bold text-sm"></span>
                 </div>
                 <span className="text-2xl font-bold bg-gradient-to-r from-orange-600 to-amber-600 bg-clip-text text-transparent">
-                  Asvada
+                  <Image
+                    src="/logo.png" 
+                    alt="Asvada Logo"
+                    width={120}
+                    height={120}
+                    priority
+                  />
                 </span>
               </div>
               <button
