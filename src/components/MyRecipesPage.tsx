@@ -1,240 +1,111 @@
+// components/MyRecipesPage.tsx
 'use client';
 
-import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { Plus, BookOpen, Clock, Users, Edit, Trash2, Eye } from 'lucide-react';
-import Link from 'next/link';
+import { useSession } from 'next-auth/react';
+import { useState } from 'react';
+import { Plus, BookOpen, Edit, Trash2, Eye } from 'lucide-react';
 import Image from 'next/image';
-import { useRouter } from 'next/navigation';
-
-interface Recipe {
-  id: number;
-  title: string;
-  description: string;
-  image: string;
-  prepTime: string;
-  cookTime: string;
-  servings: string;
-  difficulty: string;
-  category: string;
-  ingredients: string[];
-  steps: string[];
-  status: 'draft' | 'published';
-  createdAt: string;
-  rating: number;
-  reviews: number;
-}
 
 export default function MyRecipesPage() {
-  const router = useRouter();
-  const [recipes, setRecipes] = useState<Recipe[]>([]);
-  const [filter, setFilter] = useState<'all' | 'published' | 'draft'>('all');
-
-  // Load recipes from localStorage
-  useEffect(() => {
-    loadRecipes();
-    
-    // Listen for updates
-    const handleUpdate = () => loadRecipes();
-    window.addEventListener('recipesUpdated', handleUpdate);
-    window.addEventListener('storage', handleUpdate);
-    
-    return () => {
-      window.removeEventListener('recipesUpdated', handleUpdate);
-      window.removeEventListener('storage', handleUpdate);
-    };
-  }, []);
-
-  const loadRecipes = () => {
-    const saved = localStorage.getItem('myRecipes');
-    if (saved) {
-      setRecipes(JSON.parse(saved));
-    }
-  };
-
-  const deleteRecipe = (id: number) => {
-    if (confirm('Yakin ingin menghapus resep ini?')) {
-      const updated = recipes.filter(r => r.id !== id);
-      setRecipes(updated);
-      localStorage.setItem('myRecipes', JSON.stringify(updated));
-    }
-  };
-
-  const filteredRecipes = recipes.filter(recipe => {
-    if (filter === 'all') return true;
-    return recipe.status === filter;
-  });
-
-  const getDifficultyColor = (difficulty: string) => {
-    switch (difficulty) {
-      case 'easy': return 'bg-green-100 text-green-700';
-      case 'medium': return 'bg-yellow-100 text-yellow-700';
-      case 'hard': return 'bg-red-100 text-red-700';
-      default: return 'bg-gray-100 text-gray-700';
-    }
-  };
-
-  const getDifficultyText = (difficulty: string) => {
-    switch (difficulty) {
-      case 'easy': return 'Mudah';
-      case 'medium': return 'Sedang';
-      case 'hard': return 'Sulit';
-      default: return difficulty;
-    }
-  };
+  const { data: session } = useSession();
+  const [recipes, setRecipes] = useState([
+    {
+      id: '1',
+      title: 'Nasi Goreng Spesial',
+      image: '/placeholder-recipe.jpg',
+      status: 'published',
+      views: 245,
+      createdAt: '2025-01-15',
+    },
+    // Tambahkan data dummy lainnya
+  ]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-red-50 py-8">
-      <div className="max-w-7xl mx-auto px-4">
-        {/* Header */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
-          <div>
-            <h1 className="text-4xl font-bold bg-gradient-to-r from-[#902E2B] to-[#FE9412] bg-clip-text text-transparent mb-2">
-              Resep Saya
-            </h1>
-            <p className="text-gray-600">
-              Kelola dan bagikan resep favoritmu
-            </p>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
+      {/* Header */}
+      <div className="bg-white border-b sticky top-0 z-10">
+        <div className="max-w-7xl mx-auto px-4 py-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <BookOpen className="w-8 h-8 text-blue-500" />
+              <div>
+                <h1 className="text-3xl font-bold text-gray-900">Resep Saya</h1>
+                <p className="text-gray-600">{recipes.length} resep dibuat</p>
+              </div>
+            </div>
+            <button className="flex items-center gap-2 bg-blue-500 text-white px-6 py-3 rounded-full hover:bg-blue-600 transition">
+              <Plus className="w-5 h-5" />
+              Buat Resep Baru
+            </button>
           </div>
-          <button 
-          onClick={() => router.push('/recipes/create')} 
-          className="px-6 py-3 bg-gradient-to-r from-[#FE9412] to-[#902E2B] text-white rounded-full hover:shadow-xl transition font-medium flex items-center gap-2">
-            <Plus className="w-5 h-5" />
-            Buat Resep Baru
-          </button>
         </div>
+      </div>
 
-        {/* Filter Tabs */}
-        <div className="flex gap-2 mb-6 bg-white p-2 rounded-2xl shadow-md w-fit">
-          <button
-            onClick={() => setFilter('all')}
-            className={`px-6 py-2 rounded-xl font-medium transition ${
-              filter === 'all'
-                ? 'bg-gradient-to-r from-[#FE9412] to-[#902E2B] text-white shadow-md'
-                : 'text-gray-600 hover:bg-orange-50'
-            }`}
-          >
-            Semua ({recipes.length})
-          </button>
-          <button
-            onClick={() => setFilter('published')}
-            className={`px-6 py-2 rounded-xl font-medium transition ${
-              filter === 'published'
-                ? 'bg-gradient-to-r from-[#FE9412] to-[#902E2B] text-white shadow-md'
-                : 'text-gray-600 hover:bg-orange-50'
-            }`}
-          >
-            Dipublikasi ({recipes.filter(r => r.status === 'published').length})
-          </button>
-          <button
-            onClick={() => setFilter('draft')}
-            className={`px-6 py-2 rounded-xl font-medium transition ${
-              filter === 'draft'
-                ? 'bg-gradient-to-r from-[#FE9412] to-[#902E2B] text-white shadow-md'
-                : 'text-gray-600 hover:bg-orange-50'
-            }`}
-          >
-            Draft ({recipes.filter(r => r.status === 'draft').length})
-          </button>
-        </div>
-
-        {/* Recipes Grid */}
-        {filteredRecipes.length === 0 ? (
-          <div className="text-center py-16 bg-white rounded-2xl shadow-md">
-            <BookOpen className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-xl font-bold text-gray-900 mb-2">
-              Belum ada resep
-            </h3>
-            <p className="text-gray-600 mb-6">
-              Mulai buat resep pertamamu sekarang!
+      {/* Content */}
+      <div className="max-w-7xl mx-auto px-4 py-8">
+        {recipes.length === 0 ? (
+          <div className="text-center py-20">
+            <BookOpen className="w-24 h-24 text-gray-300 mx-auto mb-4" />
+            <h2 className="text-2xl font-semibold text-gray-700 mb-2">
+              Belum Ada Resep
+            </h2>
+            <p className="text-gray-500 mb-6">
+              Mulai berbagi resep favoritmu dengan dunia
             </p>
-            <button 
-            onClick={() => router.push('/recipes/create')} 
-            className="px-6 py-3 bg-gradient-to-r from-[#FE9412] to-[#902E2B] text-white rounded-full hover:shadow-xl transition font-medium inline-flex items-center gap-2">
-                <Plus className="w-5 h-5" />
-                Buat Resep
-              </button>
+            <button className="inline-flex items-center gap-2 bg-blue-500 text-white px-6 py-3 rounded-full hover:bg-blue-600 transition">
+              <Plus className="w-5 h-5" />
+              Buat Resep Pertama
+            </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredRecipes.map((recipe) => (
-              <motion.div
+          <div className="space-y-4">
+            {recipes.map((recipe) => (
+              <div
                 key={recipe.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="bg-white rounded-2xl shadow-md overflow-hidden border border-orange-100 hover:shadow-xl transition group"
+                className="bg-white rounded-2xl shadow-md p-6 hover:shadow-lg transition"
               >
-                {/* Image */}
-                <div className="relative h-48 overflow-hidden">
-                  <Image
-                    src={recipe.image}
-                    alt={recipe.title}
-                    fill
-                    className="object-cover group-hover:scale-110 transition-transform duration-300"
-                  />
-                  {/* Status Badge */}
-                  <div className="absolute top-3 left-3">
-                    <span className={`px-3 py-1 rounded-full text-xs font-semibold shadow-md ${
-                      recipe.status === 'published'
-                        ? 'bg-green-500 text-white'
-                        : 'bg-gray-500 text-white'
-                    }`}>
-                      {recipe.status === 'published' ? '✓ Published' : '📝 Draft'}
-                    </span>
+                <div className="flex items-center gap-6">
+                  <div className="relative w-32 h-32 rounded-xl overflow-hidden flex-shrink-0">
+                    <Image
+                      src={recipe.image}
+                      alt={recipe.title}
+                      fill
+                      className="object-cover"
+                    />
                   </div>
-                  {/* Difficulty Badge */}
-                  <div className="absolute top-3 right-3">
-                    <span className={`px-3 py-1 rounded-full text-xs font-semibold shadow-md ${getDifficultyColor(recipe.difficulty)}`}>
-                      {getDifficultyText(recipe.difficulty)}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Content */}
-                <div className="p-4">
-                  <h3 className="font-bold text-lg text-gray-900 mb-2 line-clamp-1">
-                    {recipe.title}
-                  </h3>
-                  <p className="text-sm text-gray-600 mb-4 line-clamp-2">
-                    {recipe.description}
-                  </p>
-
-                  {/* Meta Info */}
-                  <div className="flex items-center gap-4 text-xs text-gray-500 mb-4 pb-4 border-b border-gray-100">
-                    <div className="flex items-center gap-1">
-                      <Clock className="w-4 h-4 text-[#FE9412]" />
-                      <span>{parseInt(recipe.prepTime) + parseInt(recipe.cookTime)} min</span>
+                  <div className="flex-1">
+                    <h3 className="text-xl font-bold text-gray-900 mb-2">
+                      {recipe.title}
+                    </h3>
+                    <div className="flex items-center gap-4 text-sm text-gray-600 mb-3">
+                      <span className="flex items-center gap-1">
+                        <Eye className="w-4 h-4" />
+                        {recipe.views} views
+                      </span>
+                      <span>Dibuat: {recipe.createdAt}</span>
+                      <span
+                        className={`px-3 py-1 rounded-full text-xs ${
+                          recipe.status === 'published'
+                            ? 'bg-green-100 text-green-700'
+                            : 'bg-yellow-100 text-yellow-700'
+                        }`}
+                      >
+                        {recipe.status === 'published' ? 'Published' : 'Draft'}
+                      </span>
                     </div>
-                    <div className="flex items-center gap-1">
-                      <Users className="w-4 h-4 text-[#FE9412]" />
-                      <span>{recipe.servings} porsi</span>
+                    <div className="flex gap-2">
+                      <button className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition">
+                        <Edit className="w-4 h-4" />
+                        Edit
+                      </button>
+                      <button className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition">
+                        <Trash2 className="w-4 h-4" />
+                        Hapus
+                      </button>
                     </div>
                   </div>
-
-                  {/* Actions */}
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => router.push(`/recipe/${recipe.id}`)}
-                      className="flex-1 px-4 py-2 bg-gradient-to-r from-[#FE9412] to-[#902E2B] text-white rounded-xl hover:shadow-lg transition text-sm font-medium flex items-center justify-center gap-2"
-                    >
-                      <Eye className="w-4 h-4" />
-                      Lihat
-                    </button>
-                    <button
-                      onClick={() => router.push(`/edit-recipe/${recipe.id}`)}
-                      className="px-4 py-2 bg-blue-500 text-white rounded-xl hover:bg-blue-600 transition"
-                    >
-                      <Edit className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => deleteRecipe(recipe.id)}
-                      className="px-4 py-2 bg-red-500 text-white rounded-xl hover:bg-red-600 transition"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
                 </div>
-              </motion.div>
+              </div>
             ))}
           </div>
         )}

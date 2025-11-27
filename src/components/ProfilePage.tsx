@@ -1,61 +1,29 @@
+// components/ProfilePage.tsx
 'use client';
 
 import { useSession } from 'next-auth/react';
 import Image from 'next/image';
-import { User, Mail, Calendar, Award, Heart, BookOpen, Save, X } from 'lucide-react';
+import { User, Mail, Calendar, Award, Heart, BookOpen, Camera } from 'lucide-react';
 import { useState } from 'react';
 
 export default function ProfilePage() {
   const { data: session } = useSession();
   const [isEditing, setIsEditing] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-
-  // State untuk bio
-  const [bio, setBio] = useState(
-    'Saya seorang food enthusiast yang suka bereksperimen dengan resep-resep baru. Spesialisasi saya adalah masakan Indonesia modern dengan sentuhan fusion.'
-  );
-  const [tempBio, setTempBio] = useState(bio);
 
   const stats = [
-    { icon: BookOpen, label: 'Resep Dibuat', value: '12', color: 'text-blue-500' },
-    { icon: Heart, label: 'Resep Favorit', value: '45', color: 'text-pink-500' },
-    { icon: Award, label: 'Pencapaian', value: '8', color: 'text-yellow-500' },
+    { icon: BookOpen, label: 'Resep Dibuat', value: '12' },
+    { icon: Heart, label: 'Resep Favorit', value: '45' },
+    { icon: Award, label: 'Pencapaian', value: '8' },
   ];
 
-  const handleEdit = () => {
-    setTempBio(bio);
-    setIsEditing(true);
-  };
-
-  const handleCancel = () => {
-    setTempBio(bio);
-    setIsEditing(false);
-  };
-
-  const handleSave = async () => {
-    setIsSaving(true);
-    
-    // Simulasi API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    // Update bio
-    setBio(tempBio);
-    
-    setIsSaving(false);
-    setIsEditing(false);
-    
-    // Show success message
-    alert('Bio berhasil diperbarui! ✅');
-  };
-
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-pink-50">
       {/* Header */}
-      <div className="bg-gradient-to-br from-[#902E2B] to-[#6b2220] text-white">
+      <div className="bg-white border-b">
         <div className="max-w-4xl mx-auto px-4 py-8">
           <div className="flex items-start gap-6">
             {/* Avatar */}
-            <div className="relative">
+            <div className="relative group">
               <div className="relative w-32 h-32 rounded-full overflow-hidden border-4 border-white shadow-xl">
                 <Image
                   src={session?.user?.image || '/default-avatar.png'}
@@ -64,18 +32,32 @@ export default function ProfilePage() {
                   className="object-cover"
                 />
               </div>
+              <button className="absolute bottom-0 right-0 bg-purple-500 text-white p-2 rounded-full hover:bg-purple-600 transition shadow-lg">
+                <Camera className="w-4 h-4" />
+              </button>
             </div>
 
             {/* Info */}
             <div className="flex-1">
-              <h1 className="text-3xl font-bold mb-2">
-                {session?.user?.name || 'User'}
-              </h1>
-              <p className="text-purple-100 flex items-center gap-2 mb-3">
-                <Mail className="w-4 h-4" />
-                {session?.user?.email}
-              </p>
-              <div className="flex items-center gap-2 text-sm text-purple-100">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h1 className="text-3xl font-bold text-gray-900">
+                    {session?.user?.name || 'User'}
+                  </h1>
+                  <p className="text-gray-600 flex items-center gap-2 mt-1">
+                    <Mail className="w-4 h-4" />
+                    {session?.user?.email}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setIsEditing(!isEditing)}
+                  className="px-6 py-2 bg-purple-500 text-white rounded-full hover:bg-purple-600 transition"
+                >
+                  {isEditing ? 'Simpan' : 'Edit Profil'}
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2 text-sm text-gray-600">
                 <Calendar className="w-4 h-4" />
                 Bergabung sejak Januari 2025
               </div>
@@ -87,11 +69,11 @@ export default function ProfilePage() {
             {stats.map((stat, index) => (
               <div
                 key={index}
-                className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 text-center hover:bg-white/20 transition"
+                className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-6 text-center"
               >
-                <stat.icon className={`w-8 h-8 ${stat.color} mx-auto mb-2`} />
-                <div className="text-3xl font-bold">{stat.value}</div>
-                <div className="text-sm text-purple-100">{stat.label}</div>
+                <stat.icon className="w-8 h-8 text-purple-500 mx-auto mb-2" />
+                <div className="text-3xl font-bold text-gray-900">{stat.value}</div>
+                <div className="text-sm text-gray-600">{stat.label}</div>
               </div>
             ))}
           </div>
@@ -161,26 +143,19 @@ export default function ProfilePage() {
           )}
         </div>
 
-        {/* Achievements - READ ONLY */}
+        {/* Achievements */}
         <div className="bg-white rounded-2xl shadow-lg p-8 mt-6">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-2">
-            <Award className="w-6 h-6 text-yellow-500" />
-            Pencapaian
-          </h2>
+          <h2 className="text-2xl font-bold text-gray-900 mb-6">Pencapaian</h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {[
-              { emoji: '🏆', title: 'First Recipe', desc: 'Buat resep pertama', unlocked: true },
-              { emoji: '❤️', title: 'Loved Chef', desc: '100+ likes', unlocked: true },
-              { emoji: '⭐', title: 'Rising Star', desc: '50+ followers', unlocked: false },
-              { emoji: '🔥', title: 'Hot Streak', desc: '7 hari berturut-turut', unlocked: true },
+              { emoji: '🏆', title: 'First Recipe', desc: 'Buat resep pertama' },
+              { emoji: '❤️', title: 'Loved Chef', desc: '100+ likes' },
+              { emoji: '⭐', title: 'Rising Star', desc: '50+ followers' },
+              { emoji: '🔥', title: 'Hot Streak', desc: '7 hari berturut-turut' },
             ].map((achievement, index) => (
               <div
                 key={index}
-                className={`rounded-xl p-4 text-center transition-all hover:scale-105 ${
-                  achievement.unlocked
-                    ? 'bg-gradient-to-br from-yellow-50 to-orange-50 shadow-md'
-                    : 'bg-gray-100 opacity-50'
-                }`}
+                className="bg-gradient-to-br from-yellow-50 to-orange-50 rounded-xl p-4 text-center"
               >
                 <div className="text-4xl mb-2">{achievement.emoji}</div>
                 <div className="font-semibold text-gray-900 text-sm">{achievement.title}</div>

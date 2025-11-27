@@ -1,22 +1,19 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useSession, signOut } from 'next-auth/react';
+import { useSession } from 'next-auth/react';
 import HeroSection from '@/components/HeroSection';
 import LoginModal from '@/components/LoginModal';
 import SearchLimitBanner from '@/components/SearchLimitBanner';
-import Sidebar from '@/components/Sidebar';
+import Header from '@/components/Header';
 import RecommendedSection from '@/components/RecommendedSection';
 import Footer from '@/components/Footer';
-import { LogOut, User, Menu, Bell } from 'lucide-react';
-import Image from 'next/image';
 
 export default function Home() {
   const { data: session, status } = useSession();
   const [searchCount, setSearchCount] = useState(0);
   const [showLoginModal, setShowLoginModal] = useState(false);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [ searchData, setSearchData ] = useState({});
   
   const MAX_FREE_SEARCHES = 3;
   const isLoggedIn = status === 'authenticated';
@@ -27,11 +24,9 @@ export default function Home() {
       const saved = localStorage.getItem('guestSearchCount');
       if (saved) {
         const count = parseInt(saved, 10) || 0;
-        console.log('🔍 Loaded searchCount:', count);
         setSearchCount(count);
       }
     } else {
-      // Reset counter when logged in
       setSearchCount(0);
       localStorage.removeItem('guestSearchCount');
     }
@@ -40,43 +35,30 @@ export default function Home() {
   // Save search count to localStorage (only for guests)
   useEffect(() => {
     if (!isLoggedIn && searchCount > 0) {
-      console.log('💾 Saving searchCount:', searchCount);
       localStorage.setItem('guestSearchCount', searchCount.toString());
     }
   }, [searchCount, isLoggedIn]);
 
   const handleSearch = (query: string, filters?: Record<string, string[]>) => {
-    console.log('🔎 Search triggered. Current count:', searchCount);
-
-    // If logged in, unlimited search
     if (isLoggedIn) {
       console.log('✅ Logged in - Unlimited search');
       console.log('Search:', query, 'Filters:', filters);
-      // TODO: Implement actual search logic here
       return;
     }
 
-    // Check if limit reached
     if (searchCount >= MAX_FREE_SEARCHES) {
-      console.log('⛔ Limit reached! Opening modal...');
       setShowLoginModal(true);
       return;
     }
 
-    // Increment search count
     const newCount = searchCount + 1;
-    console.log('➕ Incrementing count to:', newCount);
     setSearchCount(newCount);
 
-    // Perform search
     console.log('✅ Search query:', query);
     console.log('✅ Filters:', filters);
-    // TODO: Implement actual search logic here
 
-    // Show modal if limit reached after this search
     if (newCount >= MAX_FREE_SEARCHES) {
       setTimeout(() => {
-        console.log('⚠️ Limit reached after search. Opening modal...');
         setShowLoginModal(true);
       }, 500);
     }
@@ -171,7 +153,6 @@ export default function Home() {
 
       {/* Main Content */}
       <main className="pt-20">
-        {/* Search Limit Banner (only for guests when searches left <= 1) */}
         {!isLoggedIn && searchesLeft <= 1 && searchCount > 0 && (
           <SearchLimitBanner 
             searchesLeft={searchesLeft}
@@ -180,23 +161,18 @@ export default function Home() {
           />
         )}
 
-        {/* Hero Section */}
         <HeroSection 
           onSearch={handleSearch}
           searchCount={searchCount}
           maxSearches={MAX_FREE_SEARCHES}
           isLoggedIn={isLoggedIn}
-		  searchData={setSearchData}
         />
 
-        {/* Recommended Section */}
-        <RecommendedSection searchData={searchData}/>
+        <RecommendedSection />
       </main>
 
-      {/* Footer */}
       <Footer />
 
-      {/* Login Modal */}
       <LoginModal 
         isOpen={showLoginModal}
         onClose={() => setShowLoginModal(false)}

@@ -1,4 +1,3 @@
-// components/FavoritesPage.tsx
 'use client';
 
 import { useSession } from 'next-auth/react';
@@ -19,27 +18,7 @@ interface Recipe {
 
 export default function FavoritesPage() {
   const { data: session } = useSession();
-  const [favorites, setFavorites] = useState<Recipe[]>([
-    // Dummy data untuk testing
-    {
-      id: '1',
-      title: 'Nasi Goreng Spesial',
-      image: '/placeholder-recipe.jpg',
-      cookTime: '30 menit',
-      servings: 4,
-      difficulty: 'Mudah',
-      savedAt: '2025-01-20',
-    },
-    {
-      id: '2',
-      title: 'Rendang Daging Sapi',
-      image: '/placeholder-recipe.jpg',
-      cookTime: '2 jam',
-      servings: 6,
-      difficulty: 'Sulit',
-      savedAt: '2025-01-18',
-    },
-  ]);
+  const [favorites, setFavorites] = useState<Recipe[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -70,18 +49,17 @@ export default function FavoritesPage() {
   }
 
   return (
-    <div className="min-h-screen">
-      
-      {/* Header Section */}
-      <div className="bg-gradient-to-r from-orange-500 to-rose-600 text-white">
-        <div className="max-w-7xl mx-auto px-4 py-8">
-          <div className="flex items-center gap-4">
-            <div className="bg-white/20 backdrop-blur-sm p-3 rounded-2xl">
-              <Heart className="w-8 h-8" />
-            </div>
+    <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-red-50">
+      {/* Header */}
+      <div className="bg-white border-b sticky top-0 z-10">
+        <div className="max-w-7xl mx-auto px-4 py-6">
+          <div className="flex items-center gap-3">
+            <Heart className="w-8 h-8 text-red-500 fill-red-500" />
             <div>
-              <h1 className="text-3xl font-bold">Resep Favorit</h1>
-              <p className="text-pink-100">{favorites.length} resep tersimpan</p>
+              <h1 className="text-3xl font-bold text-gray-900">Resep Favorit</h1>
+              <p className="text-gray-600">
+                {favorites.length} resep tersimpan
+              </p>
             </div>
           </div>
         </div>
@@ -144,6 +122,7 @@ export default function FavoritesPage() {
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-xs bg-orange-100 text-orange-700 px-3 py-1 rounded-full font-medium">
+                    <span className="text-xs bg-orange-100 text-orange-700 px-3 py-1 rounded-full">
                       {recipe.difficulty}
                     </span>
                     <Link

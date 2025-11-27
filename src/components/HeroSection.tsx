@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import { Send, ChevronDown, X, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
-import { log } from 'node:console';
 
 interface FilterOption {
   id: string;
@@ -17,32 +16,26 @@ interface HeroSectionProps {
   searchCount?: number;
   maxSearches?: number;
   isLoggedIn?: boolean;
-  searchData: (status: string, data: Record<string, string[]>) => void;
 }
 
 const HeroSection = ({ 
   onSearch, 
-  searchData,
   searchCount = 0, 
   maxSearches = 3, 
-  isLoggedIn = false, 
+  isLoggedIn = false 
 }: HeroSectionProps) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFilters, setSelectedFilters] = useState<Record<string, string[]>>({});
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [currentPlaceholder, setCurrentPlaceholder] = useState(0);
-  const [ filterValue, setFilterValue ] = useState();
-  const [ loading, setLoading ] = useState(false);
 
   const placeholderSuggestions = [
     "Ceritain dulu kamu pengen makan apa…",
-    "Pengen makan yang pedas dan berlemak...",
+    "Pengen makan yang hangat dan berkuah...",
     "Lagi pengen dessert manis nih...",
-    "Butuh makanan enak tapi rendah lemak...",
-    "Pengen masak bumbu asam manis...",
+    "Butuh makanan yang cepat dan mudah...",
+    "Pengen masak yang sehat dan bergizi...",
   ];
-
-  const FILTER_INDEX_MAP: Record<string, number> = { manis: 0, asam: 1, asin: 2, pahit: 3, umami: 4, pedas: 5, sepat: 6, lemak: 7, protein: 8, fat: 9, karbo: 10, kalori: 11, nutrisi_flag: 12, };
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -53,29 +46,34 @@ const HeroSection = ({
 
   const filterOptions: FilterOption[] = [
     {
+      id: 'category',
+      label: 'Kategori',
+      options: ['Makanan Ringan', 'Makanan Berat', 'Dessert', 'Minuman', 'Sarapan']
+    },
+    {
       id: 'taste',
       label: 'Rasa',
-      options: ['Manis', 'Asam', 'Asin', 'Pahit', 'Gurih', 'Pedas', 'Sepat', 'Berlemak']
+      options: ['Manis', 'Asin', 'Pedas', 'Asam', 'Gurih']
     },
     {
-      id: 'protein',
-      label: 'Protein',
-      options: ['Rendah', 'Sedang', 'Tinggi']
-    },
-    {
-      id: 'lemak',
-      label: 'Lemak',
-      options: ['Rendah', 'Sedang', 'Tinggi']
-    },
-    {
-      id: 'karbo',
-      label: 'Karbohidrat',
-      options: ['Rendah', 'Sedang', 'Tinggi']
+      id: 'sugar',
+      label: 'Gula',
+      options: ['Tanpa Gula', 'Gula Rendah', 'Gula Sedang', 'Gula Tinggi']
     },
     {
       id: 'calories',
       label: 'Kalori',
-      options: ['Rendah', 'Sedang', 'Tinggi']
+      options: ['<200 kal', '200-500 kal', '>500 kal']
+    },
+    {
+      id: 'difficulty',
+      label: 'Tingkat Kesulitan',
+      options: ['Mudah', 'Sedang', 'Sulit']
+    },
+    {
+      id: 'time',
+      label: 'Waktu Memasak',
+      options: ['<30 menit', '30-60 menit', '>60 menit']
     },
   ];
 
@@ -91,77 +89,16 @@ const HeroSection = ({
         : Object.fromEntries(Object.entries(prev).filter(([key]) => key !== filterId));
     });
   };
-  
-  const translateFiltersToArray = (filters: Record<string, string[]>) => {
-        const result = [0, 0, 0, 0, 0, 0, 0, -1, -1, -1, -1, -1, 0];
-
-        (filters.taste || []).forEach((rasa) => {
-            const key = rasa.toLowerCase();
-            if (FILTER_INDEX_MAP[key] !== undefined) {
-            result[FILTER_INDEX_MAP[key]] = 1;
-            }
-        });
-
-        const toNum = (val?: string) =>
-            val === 'Rendah' ? 0 :
-            val === 'Sedang' ? 0.5 :
-            val === 'Tinggi' ? 1 : -1;
-
-        const rangeCategories = ['lemak', 'protein', 'fat', 'karbo', 'kalori'];
-
-        rangeCategories.forEach((cat) => {
-            const value = filters[cat]?.[0];
-            if (value) {
-            result[FILTER_INDEX_MAP[cat]] = toNum(value);
-            }
-        });
-
-        const hasRangeValue = rangeCategories.some((cat) => {
-            const idx = FILTER_INDEX_MAP[cat];
-            return result[idx] !== -1;
-        });
-
-        if (hasRangeValue) {
-            result[FILTER_INDEX_MAP['nutrisi_flag']] = 1;
-        }
-
-        return result;
-    };
-
-    useEffect(() => {
-        setFilterValue(translateFiltersToArray(selectedFilters));
-    }, [selectedFilters]);
-
-  const filterModel = async(ids: string) => {
-    const data = await fetch(`http://localhost:3000/api/${ids}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({"data": ids === "modelDirect" ? filterValue : searchQuery})
-    })
-    const res = await data.json();
-    if (data.ok) {
-        searchData(res)       
-    }
-    setLoading(false);
-  }
 
   const handleSearch = () => {
-    if (!searchQuery.trim()) {
-      if (Object.keys(selectedFilters).length !== 0) {
-        setLoading(true)
-        filterModel("modelDirect");
-        return
-      }
+    if (!searchQuery.trim() && Object.keys(selectedFilters).length === 0) {
       return;
     }
-    setLoading(true);
     onSearch(searchQuery, selectedFilters);
-    filterModel("modelUndirect")
   };
 
   const clearAllFilters = () => {
     setSelectedFilters({});
-    searchData({});
   };
 
   const totalFiltersCount = Object.values(selectedFilters).flat().length;
@@ -174,9 +111,6 @@ const HeroSection = ({
       <div className="absolute bottom-10 right-10 text-4xl sm:text-6xl opacity-20 pointer-events-none">🍽️</div>
 
       <div className="max-w-4xl mx-auto relative">
-        <p className={`text-green-800 absolute left-1/2 transform -translate-x-1/2 bottom-1/3 bg-emerald-400/30 py-5 px-10 rounded-lg backdrop-blur-xs text-4xl font-bold ${loading ? "block" : "hidden"}`}>
-          Loading...
-        </p>
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -267,7 +201,7 @@ const HeroSection = ({
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="mb-6 flex justify-center"
+          className="mb-6"
         >
           {/* Filter Container dengan spacing yang konsisten */}
           <div className="flex flex-wrap items-center gap-3">
@@ -337,10 +271,9 @@ const HeroSection = ({
               );
             })}
           </div>
-        </motion.div>
 
-        {/* Clear Filters Button */}
-        {totalFiltersCount > 0 && (
+          {/* Clear Filters Button */}
+          {totalFiltersCount > 0 && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -355,6 +288,7 @@ const HeroSection = ({
               </button>
             </motion.div>
           )}
+        </motion.div>
       </div>
     </section>
   );
