@@ -6,6 +6,7 @@ import { useState } from 'react';
 
 interface SearchLimitBannerProps {
   searchesLeft: number;
+  maxSearches: number;
   onLoginClick: () => void;
 }
 
