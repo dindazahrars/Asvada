@@ -6,15 +6,13 @@ import { Plus, X, Upload, ChefHat, Clock, Users } from 'lucide-react';
 import Image from 'next/image';
 import { createSupabaseBrowser } from '@/lib/supabase_client';
 import { useSession } from 'next-auth/react';
-import { log } from 'console';
 
 export default function CreateRecipeForm() {
   const router = useRouter();
   const { data: session } = useSession();
   const [loading, setLoading] = useState(false);
-  const [data, setData] = useState<any>(null);
   const supabase = createSupabaseBrowser();
-  const [ipath, setIpath] = useState<string | null>(null);
+  
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -23,16 +21,7 @@ export default function CreateRecipeForm() {
     servings: '',
     difficulty: 'medium',
     category: '',
-    // image: getFilePath(null),
   });
-
-  // const getFilePath = async (image : File | null) => { {
-  //   if (!image) return null;
-  //   const path = await SaveFile(image);
-  //   setIpath(path);
-  // }
-
-  // useEffect(() => {console.log(formData)}, [formData])
 
   const [ingredients, setIngredients] = useState(['']);
   const [steps, setSteps] = useState(['']);
@@ -74,61 +63,46 @@ export default function CreateRecipeForm() {
     setSteps(newSteps);
   };
 
-  // const uploadImage = async () => {
-  //   const supabase = createSupabaseBrowser(); // ⬅ WAJIB GANTI
-  //   const fileInput = document.getElementById("recipe-image") as HTMLInputElement;
-  //   const file = fileInput?.files?.[0];
-  //   if (!file) return null;
-
-  //   const fileName = `recipes/${Date.now()}_${file.name}`;
-
-  //   const { error: uploadError } = await supabase.storage
-  //     .from("recipe_images")
-  //     .upload(fileName, file, {
-  //       upsert: false,
-  //     });
-
-  //   if (uploadError) {
-  //     console.error(uploadError);
-  //     alert("Gagal upload gambar!");
-  //     return null;
-  //   }
-
-  //   const { data } = supabase.storage
-  //     .from("recipe_images")
-  //     .getPublicUrl(fileName);
-
-  //   return data.publicUrl;
-  // };
-
   const uploadImage = async () => {
     const fileInput = document.getElementById("recipe-image") as HTMLInputElement;
     const file = fileInput?.files?.[0];
     if (!file) return null;
 
-    const form = new FormData();
-    form.append("file", file);
+    try {
+      const form = new FormData();
+      form.append("file", file);
 
-    const res = await fetch("/api/upload-image", {
-      method: "POST",
-      body: form,
-    });
+      const res = await fetch("/api/upload-image", {
+        method: "POST",
+        body: form,
+      });
 
-    const data = await res.json();
+      // Cek content type response
+      const contentType = res.headers.get("content-type");
+      
+      if (!contentType || !contentType.includes("application/json")) {
+        console.error("Response is not JSON:", await res.text());
+        throw new Error("Server returned invalid response");
+      }
 
-    if (!res.ok) {
-      console.error(data.error);
-      alert("Gagal upload gambar.");
-      return null;
+      const data = await res.json();
+
+      if (!res.ok) {
+        console.error("Upload failed:", data.error);
+        throw new Error(data.error || "Gagal upload gambar");
+      }
+
+      console.log("✅ Upload success:", data);
+      return data.url;
+
+    } catch (error) {
+      console.error("Upload error:", error);
+      throw error;
     }
-
-    return data.url; // <-- langsung return path lokal
   };
 
   const handleSubmit = async (status: "draft" | "published") => {
     setLoading(true);
-
-    const supabase = createSupabaseBrowser();
 
     // --------------------------
     // VALIDASI WAJIB
@@ -155,43 +129,85 @@ export default function CreateRecipeForm() {
       return;
     }
 
-    if (!session?.user?.id) {
-      alert("Kamu harus login dulu!");
+    if (!session?.user?.email) {
+      alert("❌ Kamu harus login dulu!");
       setLoading(false);
       return;
     }
 
-    const userId = session.user.id;
-
-    // Upload gambar
-    const imageUrl = await uploadImage();
+    // --------------------------
+    // UPLOAD GAMBAR (OPSIONAL)
+    // --------------------------
+    let imageUrl = null;
+    
+    const fileInput = document.getElementById("recipe-image") as HTMLInputElement;
+    if (fileInput?.files?.[0]) {
+      try {
+        imageUrl = await uploadImage();
+        
+        if (!imageUrl) {
+          alert("❌ Gagal upload gambar. Coba lagi!");
+          setLoading(false);
+          return;
+        }
+        
+        console.log("✅ Gambar berhasil diupload:", imageUrl);
+      } catch (error) {
+        console.error("Error uploading image:", error);
+        alert("❌ Terjadi kesalahan saat upload gambar!");
+        setLoading(false);
+        return;
+      }
+    }
 
     // --------------------------
-    // INSERT DATA
+    // DAPATKAN USER UUID DARI EMAIL
     // --------------------------
-    const { error } = await supabase.from("resep").insert([
+    console.log("🔍 Mencari user dengan email:", session.user.email);
+    
+    const { data: userData, error: userError } = await supabase
+      .from("users")
+      .select("id")
+      .eq("email", session.user.email)
+      .single();
+
+    if (userError || !userData) {
+      console.error("❌ User not found:", userError);
+      alert("❌ User tidak ditemukan di database! Pastikan akun sudah terdaftar.");
+      setLoading(false);
+      return;
+    }
+
+    console.log("✅ User UUID ditemukan:", userData.id);
+
+    // --------------------------
+    // INSERT DATA KE SUPABASE
+    // --------------------------
+    const { data, error } = await supabase.from("resep").insert([
       {
-        user_id: session.user.id,
+        user_id: userData.id, // ← Gunakan UUID dari database
         title: formData.title,
         description: formData.description,
         prep_time: parseInt(formData.prepTime || "0"),
         cook_time: parseInt(formData.cookTime || "0"),
         servings: parseInt(formData.servings || "1"),
         difficulty: formData.difficulty,
-        category: formData.category,
+        category: formData.category || null,
         ingredients: validIngredients,
         steps: validSteps,
         status,
         image_url: imageUrl,
       },
-    ]);
+    ]).select();
 
     if (error) {
-      console.error("SUPABASE ERROR:", error);
-      alert("❌ Gagal menyimpan resep! Lihat console.");
+      console.error("❌ SUPABASE ERROR:", error);
+      alert(`❌ Gagal menyimpan resep! Error: ${error.message}`);
       setLoading(false);
       return;
     }
+
+    console.log("✅ Resep berhasil disimpan:", data);
 
     alert(status === "published"
       ? "✅ Resep berhasil dipublikasikan!"
@@ -201,65 +217,6 @@ export default function CreateRecipeForm() {
     setLoading(false);
     router.push('/my-recipes');
   };
-
-  // const handleSubmit = async (status: 'draft' | 'published') => {
-  //   setLoading(true);
-    
-  //   // Validation
-  //   if (!formData.title || !formData.description) {
-  //     alert('❌ Judul dan deskripsi harus diisi!');
-  //     setLoading(false);
-  //     return;
-  //   }
-
-  //   const filteredIngredients = ingredients.filter(i => i.trim() !== '');
-  //   const filteredSteps = steps.filter(s => s.trim() !== '');
-
-  //   if (filteredIngredients.length === 0 || filteredSteps.length === 0) {
-  //     alert('❌ Bahan dan langkah-langkah harus diisi!');
-  //     setLoading(false);
-  //     return;
-  //   }
-
-  //   // Create recipe object
-  //   const newRecipe = {
-  //     id: Date.now(),
-  //     title: formData.title,
-  //     description: formData.description,
-  //     image: imagePreview || '/placeholder-recipe.jpg',
-  //     prepTime: formData.prepTime || '0',
-  //     cookTime: formData.cookTime || '0',
-  //     servings: formData.servings || '1',
-  //     difficulty: formData.difficulty,
-  //     category: formData.category || 'Lainnya',
-  //     ingredients: filteredIngredients,
-  //     steps: filteredSteps,
-  //     status: status,
-  //     createdAt: new Date().toISOString(),
-  //     rating: 0,
-  //     reviews: 0,
-  //   };
-
-  //   // Save to localStorage
-  //   const existingRecipes = JSON.parse(localStorage.getItem('myRecipes') || '[]');
-  //   existingRecipes.unshift(newRecipe);
-  //   localStorage.setItem('myRecipes', JSON.stringify(existingRecipes));
-
-  //   // Trigger event untuk update halaman my-recipes
-  //   window.dispatchEvent(new Event('recipesUpdated'));
-  //   window.dispatchEvent(new Event('storage'));
-
-  //   // Success message
-  //   const message = status === 'published' 
-  //     ? '✅ Resep berhasil dipublikasikan!' 
-  //     : '✅ Resep berhasil disimpan sebagai draft!';
-    
-  //   alert(message);
-
-  //   // Redirect langsung
-  //   setLoading(false);
-  //   router.push('/my-recipes');
-  // };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-red-50 py-8">

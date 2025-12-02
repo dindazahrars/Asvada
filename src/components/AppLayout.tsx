@@ -42,7 +42,7 @@ export default function AppLayout({
             <div className="flex items-center gap-2">
               <span className="text-xl font-bold bg-gradient-to-r from-orange-600 to-amber-600 bg-clip-text text-transparent">
                  <Image
-                  src="/logo_besar.png" 
+                  src="/logo.png" 
                   alt="Asvada Logo"
                   width={120}
                   height={120}
