@@ -179,6 +179,8 @@ export default function Home() {
       <LoginModal
         isOpen={showLoginModal}
         onClose={() => setShowLoginModal(false)}
+        searchCount={searchCount}
+        maxSearches={MAX_FREE_SEARCHES}
       />
 
       {/* Main Content */}
