@@ -6,17 +6,15 @@ import { User, Mail, Calendar, Award, Heart, BookOpen, Save, X } from 'lucide-re
 import { useState, useEffect } from 'react';
 import { createSupabaseBrowser } from '@/lib/supabase_client';
 
-// Interface untuk stats
 interface Stats {
   totalResep: number;
 }
 
-// Interface untuk Achievement yang ditampilkan
 interface AchievementItem {
   id: string;
   title: string;
   description: string;
-  icon: string; // emoji
+  icon: string;
   unlocked: boolean;
 }
 
@@ -26,96 +24,86 @@ export default function ProfilePage() {
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Bio
   const [bio, setBio] = useState('');
   const [tempBio, setTempBio] = useState('');
 
-  // Stats Supabase
   const [totalResep, setTotalResep] = useState(0);
   const [totalFavorite, setTotalFavorite] = useState(0);
   const [achievement, setAchievement] = useState(0);
 
-  // Achievements
   const [achievementList, setAchievementList] = useState<AchievementItem[]>([]);
-
-  // Join date
   const [joinDate, setJoinDate] = useState("");
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   useEffect(() => {
-  if (!session?.user?.email) return;
+    if (!session?.user?.email) return;
 
-  const loadData = async () => {
+    const loadData = async () => {
+      // Ambil user data
+      const { data: userRow, error } = await supabase
+        .from("users")
+        .select("id, bio, created_at")
+        .eq("email", session.user.email)
+        .single();
 
-    // Ambil UUID Supabase berdasarkan email
-    const { data: userRow, error } = await supabase
-      .from("users")
-      .select("id, bio, achievement, created_at")
-      .eq("email", session.user.email)
-      .single();
+      if (!userRow) {
+        console.error("User tidak ditemukan:", error);
+        return;
+      }
 
-    if (!userRow) {
-      console.error("User tidak ditemukan:", error);
-      return;
-    }
+      const userId = userRow.id;
+      setCurrentUserId(userId);
 
-    const userId = userRow.id;
+      // Set BIO
+      setBio(userRow.bio || "");
+      setTempBio(userRow.bio || "");
 
-    // Set BIO dari Supabase
-    setBio(userRow.bio || "");
-    setTempBio(userRow.bio || "");
-    setAchievement(userRow.achievement || 0);
+      // Hitung total resep yang dibuat user
+      const { count: resepCount } = await supabase
+        .from("resep")
+        .select("*", { count: "exact", head: true })
+        .eq("user_id", userId);
 
-    // Hitung total resep
-    const { count: resepCount } = await supabase
-      .from("resep")
-      .select("*", { count: "exact", head: true })
-      .eq("user_id", userId);
+      // Hitung total favorite user (gunakan id_user, bukan user_id)
+      const { count: favCount } = await supabase
+        .from("favorite")
+        .select("*", { count: "exact", head: true })
+        .eq("id_user", userId);
 
-    // Hitung total favorite
-    const { count: favCount } = await supabase
-      .from("favorite")
-      .select("*", { count: "exact", head: true })
-      .eq("user_id", userId);
+      setTotalResep(resepCount || 0);
+      setTotalFavorite(favCount || 0);
 
-    setTotalResep(resepCount || 0);
-    setTotalFavorite(favCount || 0);
+      const stats: Stats = { totalResep: resepCount || 0 };
 
-    const stats: Stats = {totalResep: resepCount || 0,};
+      // Check achievements
+      await checkAchievements(userId, stats);
 
-    // Jalankan rules
-    await checkAchievements(userId, stats);
+      // Generate achievement list untuk UI
+      await generateAchievementList(userId, stats);
 
-    // Update UI achievement list
-    generateAchievementList(stats);
+      // Format join date
+      if (userRow.created_at) {
+        const date = new Date(userRow.created_at);
+        const monthNames = [
+          "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+          "Juli", "Agustus", "September", "Oktober", "November", "Desember"
+        ];
+        const day = date.getDate();
+        const month = monthNames[date.getMonth()];
+        const year = date.getFullYear();
+        setJoinDate(`${day} ${month} ${year}`);
+      }
+    };
 
-    if (userRow.created_at) {
-      const date = new Date(userRow.created_at);
-
-      const monthNames = [
-        "Januari", "Februari", "Maret", "April", "Mei", "Juni",
-        "Juli", "Agustus", "September", "Oktober", "November", "Desember"
-      ];
-
-      const day = date.getDate();                   // tanggal
-      const month = monthNames[date.getMonth()];    // bulan
-      const year = date.getFullYear();              // tahun
-
-      const formatted = `${day} ${month} ${year}`;
-      setJoinDate(formatted);
-    }
-    
-  };
-
-  loadData();
+    loadData();
   }, [session]);
 
   const stats = [
     { icon: BookOpen, label: 'Resep Dibuat', value: totalResep, color: 'text-blue-500' },
     { icon: Heart, label: 'Resep Favorit', value: totalFavorite, color: 'text-pink-500' },
-    // { icon: Award, label: 'Pencapaian', value: achievement, color: 'text-yellow-500' },
   ];
 
-  // RULES BASE
+  // Achievement Rules
   const achievementRules = [
     {
       id: "first_recipe",
@@ -147,20 +135,28 @@ export default function ProfilePage() {
     },
   ];
 
-  // Convert rules → UI item
-  const generateAchievementList = (stats: Stats) => {
+  // Generate achievement list dengan data dari DB
+  const generateAchievementList = async (userId: string, stats: Stats) => {
+    // Ambil achievements yang sudah unlock dari DB
+    const { data: unlockedAchievements } = await supabase
+      .from('achievements')
+      .select('title')
+      .eq('user_id', userId);
+
+    const unlockedTitles = unlockedAchievements?.map(a => a.title) || [];
+
     const list: AchievementItem[] = achievementRules.map(rule => ({
       id: rule.id,
       title: rule.title,
       description: rule.description,
       icon: rule.icon,
-      unlocked: rule.condition(stats),
+      unlocked: unlockedTitles.includes(rule.title),
     }));
 
     setAchievementList(list);
   };
 
-  // Insert achievements ke DB
+  // Check dan insert achievements baru
   const checkAchievements = async (userId: string, stats: Stats) => {
     const { data: existing } = await supabase
       .from('achievements')
@@ -183,40 +179,25 @@ export default function ProfilePage() {
 
   // Save Bio
   const handleSave = async () => {
-  if (!session?.user?.email) return;
+    if (!currentUserId) return;
 
-  setIsSaving(true);
+    setIsSaving(true);
 
-  // ambil UUID Supabase berdasarkan email
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("id")
-    .eq("email", session.user.email)
-    .single();
+    const { error } = await supabase
+      .from("users")
+      .update({ bio: tempBio })
+      .eq("id", currentUserId);
 
-  if (userError || !userData) {
-    console.error("User tidak ditemukan:", userError);
-    alert("❌ User tidak ditemukan di database!");
+    if (error) {
+      console.error("Gagal update bio:", error);
+      alert("Gagal menyimpan Bio!");
+    } else {
+      setBio(tempBio);
+      alert("Bio berhasil diperbarui! ✅");
+    }
+
+    setIsEditing(false);
     setIsSaving(false);
-    return;
-  }
-
-  // update bio pakai ID Supabase
-  const { error: updateError } = await supabase
-    .from("users")
-    .update({ bio: tempBio })
-    .eq("id", userData.id);
-
-  if (updateError) {
-    console.error("Gagal update bio:", updateError);
-    alert("Gagal menyimpan Bio!");
-  } else {
-    setBio(tempBio);
-    alert("Bio berhasil diperbarui! ✅");
-  }
-
-  setIsEditing(false);
-  setIsSaving(false);
   };
 
   const handleCancel = () => {
@@ -345,10 +326,10 @@ export default function ProfilePage() {
         {/* ACHIEVEMENTS */}
         <div className="bg-white rounded-2xl shadow-lg p-8 mt-6">
           <div className="flex items-center justify-between mb-4">
-          <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-            <Award className="w-6 h-6 text-yellow-500" />
-            Pencapaian
-          </h2>
+            <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+              <Award className="w-6 h-6 text-yellow-500" />
+              Pencapaian
+            </h2>
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -374,7 +355,6 @@ export default function ProfilePage() {
             ))}
           </div>
         </div>
-
       </div>
     </div>
   );

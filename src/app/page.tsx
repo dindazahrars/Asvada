@@ -10,7 +10,7 @@ import RecommendedSection from '@/components/RecommendedSection';
 import Footer from '@/components/Footer';
 import { LogOut, User, Menu, Bell } from 'lucide-react';
 import Image from 'next/image';
-import ModelRecipeDetail from '@/components/ModelReceipeDetail';
+import ModelRecipeDetail from '@/components/ReceipeDetailPublicPage';
 
 export default function Home() {
   const { data: session, status } = useSession();

@@ -2,7 +2,7 @@
 import { motion } from 'framer-motion';
 import Image from 'next/image';
 import { useState } from 'react';
-import ModalRecipeDetail from './ModelReceipeDetail';
+import ModalRecipeDetail from './ReceipeDetailPublicPage';
 
 export default function CardRecipe({ data }) {
 
