@@ -6,14 +6,12 @@ import { User, Mail, Calendar, Award, Heart, BookOpen, Save, X } from 'lucide-re
 import { useState, useEffect } from 'react';
 import { createSupabaseBrowser } from '@/lib/supabase_client';
 
-// ⬇️ Interface untuk stats
+// Interface untuk stats
 interface Stats {
   totalResep: number;
-  totalLikes: number;
-  streakDays: number;
 }
 
-// ⬇️ Interface untuk Achievement yang ditampilkan
+// Interface untuk Achievement yang ditampilkan
 interface AchievementItem {
   id: string;
   title: string;
@@ -40,6 +38,9 @@ export default function ProfilePage() {
   // Achievements
   const [achievementList, setAchievementList] = useState<AchievementItem[]>([]);
 
+  // Join date
+  const [joinDate, setJoinDate] = useState("");
+
   useEffect(() => {
   if (!session?.user?.email) return;
 
@@ -48,7 +49,7 @@ export default function ProfilePage() {
     // Ambil UUID Supabase berdasarkan email
     const { data: userRow, error } = await supabase
       .from("users")
-      .select("id, bio, achievement")
+      .select("id, bio, achievement, created_at")
       .eq("email", session.user.email)
       .single();
 
@@ -79,48 +80,30 @@ export default function ProfilePage() {
     setTotalResep(resepCount || 0);
     setTotalFavorite(favCount || 0);
 
-    // Ambil total likes dari semua resep user
-    const { data: resepUserRaw } = await supabase
-      .from("resep")
-      .select("like, created_at")
-      .eq("user_id", userId);
-
-    const resepUser = resepUserRaw ?? []; // ALWAYS array
-
-    const totalLikes = resepUser?.reduce((sum, r) => sum + (r.like || 0), 0) || 0;
-
-    // Hitung streak upload resep 7 hari berturut-turut
-    let streakDays = 1;
-
-    if (resepUser?.length > 0) {
-      // Urutkan tanggal upload resep
-      const dates = resepUser
-        .map(r => new Date(r.created_at))
-        .sort((a, b) => b.getTime() - a.getTime());
-
-      for (let i = 0; i < dates.length - 1; i++) {
-        const diff =
-          (dates[i].getTime() - dates[i + 1].getTime()) / (1000 * 60 * 60 * 24);
-
-        if (diff <= 1.2) { // toleransi timezone
-          streakDays++;
-        } else {
-          break;
-        }
-      }
-    }
-
-    const stats: Stats = {
-    totalResep: resepCount || 0,
-    totalLikes,
-    streakDays
-    };
+    const stats: Stats = {totalResep: resepCount || 0,};
 
     // Jalankan rules
-      await checkAchievements(userId, stats);
+    await checkAchievements(userId, stats);
 
     // Update UI achievement list
     generateAchievementList(stats);
+
+    if (userRow.created_at) {
+      const date = new Date(userRow.created_at);
+
+      const monthNames = [
+        "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+        "Juli", "Agustus", "September", "Oktober", "November", "Desember"
+      ];
+
+      const day = date.getDate();                   // tanggal
+      const month = monthNames[date.getMonth()];    // bulan
+      const year = date.getFullYear();              // tahun
+
+      const formatted = `${day} ${month} ${year}`;
+      setJoinDate(formatted);
+    }
+    
   };
 
   loadData();
@@ -129,7 +112,7 @@ export default function ProfilePage() {
   const stats = [
     { icon: BookOpen, label: 'Resep Dibuat', value: totalResep, color: 'text-blue-500' },
     { icon: Heart, label: 'Resep Favorit', value: totalFavorite, color: 'text-pink-500' },
-    { icon: Award, label: 'Pencapaian', value: achievement, color: 'text-yellow-500' },
+    // { icon: Award, label: 'Pencapaian', value: achievement, color: 'text-yellow-500' },
   ];
 
   // RULES BASE
@@ -137,34 +120,34 @@ export default function ProfilePage() {
     {
       id: "first_recipe",
       condition: (s: Stats) => s.totalResep >= 1,
-      title: "First Recipe",
-      description: "Buat resep pertama",
-      icon: "🏆",
+      title: "Koki Pemula",
+      description: "First Recipe",
+      icon: "👩‍🍳",
     },
     {
-      id: "liked10",
-      condition: (s: Stats) => s.totalLikes >= 10,
-      title: "Loved Chef",
-      description: "10+ likes",
+      id: "recipe_10",
+      condition: (s: Stats) => s.totalResep >= 10,
+      title: "Koki Aktif",
+      description: "10+ Resep Dibuat",
       icon: "❤️",
     },
     {
-      id: "liked50",
-      condition: (s: Stats) => s.totalLikes >= 50,
-      title: "Master Chef",
-      description: "50+ likes",
+      id: "recipe_50",
+      condition: (s: Stats) => s.totalResep >= 50,
+      title: "Koki Berpengalaman",
+      description: "50+ Resep Dibuat",
       icon: "⭐",
     },
     {
-      id: "streak7",
-      condition: (s: Stats) => s.streakDays >= 7,
-      title: "Hot Streak",
-      description: "7 hari berturut-turut",
-      icon: "🔥",
+      id: "recipe_100",
+      condition: (s: Stats) => s.totalResep >= 100,
+      title: "Koki Legendaris",
+      description: "100+ Resep Dibuat",
+      icon: "🏆",
     },
   ];
 
-  // ⬇️ Convert rules → UI item
+  // Convert rules → UI item
   const generateAchievementList = (stats: Stats) => {
     const list: AchievementItem[] = achievementRules.map(rule => ({
       id: rule.id,
@@ -177,7 +160,7 @@ export default function ProfilePage() {
     setAchievementList(list);
   };
 
-  // ⬇️ Insert achievements ke DB
+  // Insert achievements ke DB
   const checkAchievements = async (userId: string, stats: Stats) => {
     const { data: existing } = await supabase
       .from('achievements')
@@ -204,7 +187,7 @@ export default function ProfilePage() {
 
   setIsSaving(true);
 
-  // 🔍 ambil UUID Supabase berdasarkan email
+  // ambil UUID Supabase berdasarkan email
   const { data: userData, error: userError } = await supabase
     .from("users")
     .select("id")
@@ -218,7 +201,7 @@ export default function ProfilePage() {
     return;
   }
 
-  // 🔥 update bio pakai ID Supabase
+  // update bio pakai ID Supabase
   const { error: updateError } = await supabase
     .from("users")
     .update({ bio: tempBio })
@@ -275,13 +258,13 @@ export default function ProfilePage() {
               </p>
               <div className="flex items-center gap-2 text-sm text-purple-100">
                 <Calendar className="w-4 h-4" />
-                Bergabung sejak Januari 2025
+                Bergabung sejak {joinDate || "—"}
               </div>
             </div>
           </div>
 
           {/* Stats */}
-          <div className="grid grid-cols-3 gap-4 mt-8">
+          <div className="grid grid-cols-2 gap-4 mt-8">
             {stats.map((stat, index) => (
               <div
                 key={index}
@@ -361,10 +344,12 @@ export default function ProfilePage() {
 
         {/* ACHIEVEMENTS */}
         <div className="bg-white rounded-2xl shadow-lg p-8 mt-6">
+          <div className="flex items-center justify-between mb-4">
           <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
             <Award className="w-6 h-6 text-yellow-500" />
             Pencapaian
           </h2>
+          </div>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {achievementList.map((a, i) => (
