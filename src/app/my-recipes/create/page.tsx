@@ -1,12 +1,12 @@
 'use client';
 
 import AppLayout from '@/components/AppLayout';
-import MyRecipesPage from '@/components/MyRecipesPage';
+import CreateRecipeForm from '@/components/CreateRecipesForm';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 
-export default function MyRecipesRoute() {
+export default function CreateRecipePage() {
   const { data: session, status } = useSession();
   const router = useRouter();
 
@@ -29,7 +29,7 @@ export default function MyRecipesRoute() {
 
   return (
     <AppLayout>
-      <MyRecipesPage />
+      <CreateRecipeForm />
     </AppLayout>
   );
 }

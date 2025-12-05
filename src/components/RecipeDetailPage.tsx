@@ -22,10 +22,6 @@ interface Recipe {
   steps: string[];
   status: 'draft' | 'published';
   created_at: string;
-  users?: {
-    name: string;
-    email: string;
-  };
 }
 
 export default function RecipeDetailPage() {
@@ -35,6 +31,7 @@ export default function RecipeDetailPage() {
   const [recipe, setRecipe] = useState<Recipe | null>(null);
   const [loading, setLoading] = useState(true);
   const [isOwner, setIsOwner] = useState(false);
+  const [authorName, setAuthorName] = useState<string>('');
   const supabase = createSupabaseBrowser();
 
   useEffect(() => {
@@ -47,19 +44,18 @@ export default function RecipeDetailPage() {
     setLoading(true);
 
     try {
+      console.log('🔍 Loading recipe with ID:', params.id);
+
       const { data, error } = await supabase
         .from('resep')
-        .select(`
-          *,
-          users (
-            name,
-            email
-          )
-        `)
+        .select('*')
         .eq('id', params.id)
         .single();
 
-      if (error) {
+      console.log('📦 Data:', data);
+      console.log('❌ Error:', error);
+
+      if (error || !data) {
         console.error('Error loading recipe:', error);
         alert('❌ Resep tidak ditemukan!');
         router.push('/my-recipes');
@@ -68,20 +64,38 @@ export default function RecipeDetailPage() {
 
       setRecipe(data);
 
-      // Check if current user is the owner
-      if (session?.user?.email) {
+      // Get author name
+      if (data.user_id) {
         const { data: userData } = await supabase
+          .from('users')
+          .select('name')
+          .eq('id', data.user_id)
+          .single();
+
+        if (userData) {
+          setAuthorName(userData.name);
+        }
+      }
+
+      // Check owner
+      if (session?.user?.email) {
+        const { data: currentUserData } = await supabase
           .from('users')
           .select('id')
           .eq('email', session.user.email)
           .single();
 
-        if (userData && userData.id === data.user_id) {
+        console.log('👤 Current user data:', currentUserData);
+        console.log('📝 Recipe user_id:', data.user_id);
+
+        if (currentUserData && currentUserData.id === data.user_id) {
           setIsOwner(true);
+          console.log('✅ User is owner!');
         }
       }
     } catch (error) {
-      console.error('Error:', error);
+      console.error('💥 Catch error:', error);
+      alert(`❌ Terjadi kesalahan: ${error}`);
     } finally {
       setLoading(false);
     }
@@ -107,6 +121,20 @@ export default function RecipeDetailPage() {
     } catch (error) {
       console.error('Error:', error);
       alert('❌ Terjadi kesalahan!');
+    }
+  };
+
+  const handleShare = () => {
+    const url = window.location.href;
+    if (navigator.share) {
+      navigator.share({
+        title: recipe?.title,
+        text: recipe?.description,
+        url: url,
+      }).catch((error) => console.log('Error sharing:', error));
+    } else {
+      navigator.clipboard.writeText(url);
+      alert('✅ Link berhasil disalin!');
     }
   };
 
@@ -158,11 +186,11 @@ export default function RecipeDetailPage() {
       <div className="max-w-5xl mx-auto px-4">
         {/* Back Button */}
         <button
-          onClick={() => router.back()}
+          onClick={() => router.push('/my-recipes')}
           className="flex items-center gap-2 text-gray-600 hover:text-[#FE9412] mb-6 transition"
         >
           <ArrowLeft className="w-5 h-5" />
-          <span className="font-medium">Kembali</span>
+          <span className="font-medium">Kembali ke Resep Saya</span>
         </button>
 
         {/* Hero Image */}
@@ -180,10 +208,8 @@ export default function RecipeDetailPage() {
             </div>
           )}
           
-          {/* Overlay Gradient */}
           <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
           
-          {/* Title Overlay */}
           <div className="absolute bottom-0 left-0 right-0 p-8 text-white">
             <div className="flex items-center gap-3 mb-3">
               <span className={`px-4 py-1.5 rounded-full text-sm font-semibold ${getDifficultyColor(recipe.difficulty)}`}>
@@ -192,6 +218,11 @@ export default function RecipeDetailPage() {
               {recipe.status === 'draft' && (
                 <span className="px-4 py-1.5 rounded-full text-sm font-semibold bg-gray-500 text-white">
                   📝 Draft
+                </span>
+              )}
+              {recipe.category && (
+                <span className="px-4 py-1.5 rounded-full text-sm font-semibold bg-white/20 backdrop-blur-sm text-white">
+                  {recipe.category}
                 </span>
               )}
             </div>
@@ -204,7 +235,7 @@ export default function RecipeDetailPage() {
         {isOwner && (
           <div className="flex gap-3 mb-6">
             <button
-              onClick={() => router.push(`/recipes/edit/${recipe.id}`)}
+              onClick={() => router.push(`/my-recipes/edit/${recipe.id}`)}
               className="flex-1 px-6 py-3 bg-blue-500 text-white rounded-xl hover:bg-blue-600 transition font-medium flex items-center justify-center gap-2"
             >
               <Edit className="w-5 h-5" />
@@ -218,10 +249,7 @@ export default function RecipeDetailPage() {
               Hapus
             </button>
             <button
-              onClick={() => {
-                navigator.clipboard.writeText(window.location.href);
-                alert('✅ Link berhasil disalin!');
-              }}
+              onClick={handleShare}
               className="px-6 py-3 bg-gray-500 text-white rounded-xl hover:bg-gray-600 transition font-medium flex items-center gap-2"
             >
               <Share2 className="w-5 h-5" />
@@ -229,10 +257,20 @@ export default function RecipeDetailPage() {
           </div>
         )}
 
+        {!isOwner && (
+          <div className="flex justify-end mb-6">
+            <button
+              onClick={handleShare}
+              className="px-6 py-3 bg-[#FE9412] text-white rounded-xl hover:bg-[#e58410] transition font-medium flex items-center gap-2"
+            >
+              <Share2 className="w-5 h-5" />
+              Bagikan Resep
+            </button>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left Column - Info & Ingredients */}
           <div className="lg:col-span-1 space-y-6">
-            {/* Quick Info */}
             <div className="bg-white rounded-2xl shadow-md p-6 border border-orange-100">
               <h2 className="text-xl font-bold text-gray-900 mb-4">Informasi</h2>
               <div className="space-y-4">
@@ -266,7 +304,6 @@ export default function RecipeDetailPage() {
               </div>
             </div>
 
-            {/* Ingredients */}
             <div className="bg-white rounded-2xl shadow-md p-6 border border-orange-100">
               <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
                 <span className="w-8 h-8 bg-gradient-to-br from-[#FE9412] to-[#902E2B] text-white rounded-full flex items-center justify-center text-sm font-bold">
@@ -287,7 +324,6 @@ export default function RecipeDetailPage() {
             </div>
           </div>
 
-          {/* Right Column - Steps */}
           <div className="lg:col-span-2">
             <div className="bg-white rounded-2xl shadow-md p-6 border border-orange-100">
               <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
@@ -310,11 +346,10 @@ export default function RecipeDetailPage() {
               </div>
             </div>
 
-            {/* Author Info */}
-            {recipe.users && (
+            {authorName && (
               <div className="mt-6 bg-white rounded-2xl shadow-md p-6 border border-orange-100">
                 <h3 className="text-sm font-semibold text-gray-600 mb-2">Dibuat oleh</h3>
-                <p className="text-lg font-bold text-gray-900">{recipe.users.name}</p>
+                <p className="text-lg font-bold text-gray-900">{authorName}</p>
                 <p className="text-sm text-gray-500">
                   {new Date(recipe.created_at).toLocaleDateString('id-ID', {
                     day: 'numeric',

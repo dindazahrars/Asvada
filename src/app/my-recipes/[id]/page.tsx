@@ -1,13 +1,12 @@
-//app/recipes/create/page.tsx
 'use client';
 
 import AppLayout from '@/components/AppLayout';
-import CreateRecipeForm from '@/components/CreateRecipesForm';
+import RecipeDetailPage from '@/components/RecipeDetailPage';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 
-export default function CreateRecipePage() {
+export default function RecipeDetailRoute() {
   const { data: session, status } = useSession();
   const router = useRouter();
 
@@ -30,7 +29,7 @@ export default function CreateRecipePage() {
 
   return (
     <AppLayout>
-      <CreateRecipeForm />
+      <RecipeDetailPage />
     </AppLayout>
   );
 }

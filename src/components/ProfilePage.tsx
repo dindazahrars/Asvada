@@ -3,28 +3,160 @@
 import { useSession } from 'next-auth/react';
 import Image from 'next/image';
 import { User, Mail, Calendar, Award, Heart, BookOpen, Save, X } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { createSupabaseBrowser } from '@/lib/supabase_client';
+
+interface Stats {
+  totalResep: number;
+  totalLikes: number;
+  streakDays: number;
+}
+
 
 export default function ProfilePage() {
   const { data: session } = useSession();
+  const supabase = createSupabaseBrowser();
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
-  // State untuk bio
-  const [bio, setBio] = useState(
-    'Saya seorang food enthusiast yang suka bereksperimen dengan resep-resep baru. Spesialisasi saya adalah masakan Indonesia modern dengan sentuhan fusion.'
-  );
-  const [tempBio, setTempBio] = useState(bio);
+  // Bio
+  const [bio, setBio] = useState('');
+  const [tempBio, setTempBio] = useState('');
+
+  // Stats Supabase
+  const [totalResep, setTotalResep] = useState(0);
+  const [totalFavorite, setTotalFavorite] = useState(0);
+  const [achievement, setAchievement] = useState(0);
+
+  // Achievements
+  const [achievements, setAchievements] = useState<any[]>([]);
+
+  useEffect(() => {
+  if (!session?.user?.email) return;
+
+  const loadData = async () => {
+
+    // 1️⃣ Ambil UUID Supabase berdasarkan email
+    const { data: userRow, error } = await supabase
+      .from("users")
+      .select("id, bio, achievement")
+      .eq("email", session.user.email)
+      .single();
+
+    if (!userRow) {
+      console.error("User tidak ditemukan:", error);
+      return;
+    }
+
+    const userId = userRow.id;
+
+    // Set BIO dari Supabase
+    setBio(userRow.bio || "");
+    setTempBio(userRow.bio || "");
+    setAchievement(userRow.achievement || 0);
+
+    // 2️⃣ Hitung total resep
+    const { count: resepCount } = await supabase
+      .from("resep")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", userId);
+
+    // 3️⃣ Hitung total favorite
+    const { count: favCount } = await supabase
+      .from("favorite")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", userId);
+
+    setTotalResep(resepCount || 0);
+    setTotalFavorite(favCount || 0);
+
+    // Ambil total likes dari semua resep user
+    const { data: resepUserRaw } = await supabase
+      .from("resep")
+      .select("like, created_at")
+      .eq("user_id", userId);
+
+    const resepUser = resepUserRaw ?? []; // ALWAYS array
+
+    const totalLikes = resepUser?.reduce((sum, r) => sum + (r.like || 0), 0) || 0;
+
+    // Hitung streak upload resep 7 hari berturut-turut
+    let streakDays = 1;
+
+    if (resepUser?.length > 0) {
+      // Urutkan tanggal upload resep
+      const dates = resepUser
+        .map(r => new Date(r.created_at))
+        .sort((a, b) => b.getTime() - a.getTime());
+
+      for (let i = 0; i < dates.length - 1; i++) {
+        const diff =
+          (dates[i].getTime() - dates[i + 1].getTime()) / (1000 * 60 * 60 * 24);
+
+        if (diff <= 1.2) { // toleransi timezone
+          streakDays++;
+        } else {
+          break;
+        }
+      }
+    }
+
+    const stats: Stats = {
+    totalResep: resepCount || 0,
+    totalLikes,
+    streakDays
+    };
+
+    // Jalankan rules pencapaian
+    await checkAchievements(userId, stats);
+
+  };
+
+  loadData();
+  }, [session]);
+
 
   const stats = [
-    { icon: BookOpen, label: 'Resep Dibuat', value: '12', color: 'text-blue-500' },
-    { icon: Heart, label: 'Resep Favorit', value: '45', color: 'text-pink-500' },
-    { icon: Award, label: 'Pencapaian', value: '8', color: 'text-yellow-500' },
+    { icon: BookOpen, label: 'Resep Dibuat', value: totalResep, color: 'text-blue-500' },
+    { icon: Heart, label: 'Resep Favorit', value: totalFavorite, color: 'text-pink-500' },
+    { icon: Award, label: 'Pencapaian', value: achievement, color: 'text-yellow-500' },
   ];
 
-  const handleEdit = () => {
-    setTempBio(bio);
-    setIsEditing(true);
+  const handleSave = async () => {
+  if (!session?.user?.email) return;
+
+  setIsSaving(true);
+
+  // 🔍 ambil UUID Supabase berdasarkan email
+  const { data: userData, error: userError } = await supabase
+    .from("users")
+    .select("id")
+    .eq("email", session.user.email)
+    .single();
+
+  if (userError || !userData) {
+    console.error("User tidak ditemukan:", userError);
+    alert("❌ User tidak ditemukan di database!");
+    setIsSaving(false);
+    return;
+  }
+
+  // 🔥 update bio pakai ID Supabase
+  const { error: updateError } = await supabase
+    .from("users")
+    .update({ bio: tempBio })
+    .eq("id", userData.id);
+
+  if (updateError) {
+    console.error("Gagal update bio:", updateError);
+    alert("Gagal menyimpan Bio!");
+  } else {
+    setBio(tempBio);
+    alert("Bio berhasil diperbarui! ✅");
+  }
+
+  setIsEditing(false);
+  setIsSaving(false);
   };
 
   const handleCancel = () => {
@@ -32,20 +164,61 @@ export default function ProfilePage() {
     setIsEditing(false);
   };
 
-  const handleSave = async () => {
-    setIsSaving(true);
-    
-    // Simulasi API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    // Update bio
-    setBio(tempBio);
-    
-    setIsSaving(false);
-    setIsEditing(false);
-    
-    // Show success message
-    alert('Bio berhasil diperbarui! ✅');
+  const handleEdit = () => {
+    setTempBio(bio);
+    setIsEditing(true);
+  };
+
+  // RULES
+  const achievementRules = [
+  {
+    id: 'first_recipe',
+    condition: (stats: Stats) => stats.totalResep >= 1,
+    title: 'First Recipe',
+    description: 'Buat resep pertama',
+    icon: '🏆',
+  },
+  {
+    id: 'loved_chef',
+    condition: (stats: Stats) => stats.totalLikes >= 10,
+    title: 'Loved Chef',
+    description: '10+ likes',
+    icon: '❤️',
+  },
+  {
+    id: 'rising_star',
+    condition: (stats: Stats) => stats.totalLikes >= 50,
+    title: 'Loved Chef',
+    description: '50+ likes',
+    icon: '❤️',
+  },
+  {
+    id: 'hot_streak',
+    condition: (stats: Stats) => stats.streakDays >= 7,
+    title: 'Hot Streak',
+    description: '7 hari berturut-turut',
+    icon: '🔥',
+  }
+];
+
+const checkAchievements = async (userId: string, stats: Stats) => {
+  const { data: existing } = await supabase
+    .from('achievements')
+    .select('title')
+    .eq('user_id', userId);
+
+  const existingTitles = existing?.map((a) => a.title) || [];
+
+  for (const rule of achievementRules) {
+    if (!existingTitles.includes(rule.title) && rule.condition(stats)) {
+      await supabase.from('achievements').insert({
+        user_id: userId,
+        title: rule.title,
+        description: rule.description,
+        icon: rule.icon
+      });
+    }
+  }
   };
 
   return (
