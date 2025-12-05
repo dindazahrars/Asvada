@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import { Send, ChevronDown, X, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
-import { log } from 'node:console';
 
 interface FilterOption {
   id: string;
@@ -12,17 +11,32 @@ interface FilterOption {
   options: string[];
 }
 
+interface Recipe {
+  id: number;
+  title: string;
+  description: string;
+  image_url: string;
+  cook_time: string | number;
+  difficulty: string;
+  servings: number;
+  user_id: string | null;
+}
+
+interface SearchData {
+  data: Recipe[];
+}
+
 interface HeroSectionProps {
   onSearch: (query: string, filters: Record<string, string[]>) => void;
   searchCount?: number;
   maxSearches?: number;
   isLoggedIn?: boolean;
-  searchData: (status: string, data: Record<string, string[]>) => void;
+  setSearchData: (data: SearchData) => void;
 }
 
 const HeroSection = ({ 
   onSearch, 
-  searchData,
+  setSearchData,
   searchCount = 0, 
   maxSearches = 3, 
   isLoggedIn = false, 
@@ -31,8 +45,8 @@ const HeroSection = ({
   const [selectedFilters, setSelectedFilters] = useState<Record<string, string[]>>({});
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [currentPlaceholder, setCurrentPlaceholder] = useState(0);
-  const [ filterValue, setFilterValue ] = useState();
-  const [ loading, setLoading ] = useState(false);
+  const [filterValue, setFilterValue] = useState<number[]>([]);
+  const [loading, setLoading] = useState(false);
 
   const placeholderSuggestions = [
     "Ceritain dulu kamu pengen makan apa…",
@@ -42,7 +56,21 @@ const HeroSection = ({
     "Pengen masak bumbu asam manis...",
   ];
 
-  const FILTER_INDEX_MAP: Record<string, number> = { manis: 0, asam: 1, asin: 2, pahit: 3, umami: 4, pedas: 5, sepat: 6, lemak: 7, protein: 8, fat: 9, karbo: 10, kalori: 11, nutrisi_flag: 12, };
+  const FILTER_INDEX_MAP: Record<string, number> = { 
+    manis: 0, 
+    asam: 1, 
+    asin: 2, 
+    pahit: 3, 
+    umami: 4, 
+    pedas: 5, 
+    sepat: 6, 
+    berlemak: 7, 
+    protein: 8, 
+    lemak: 9, 
+    karbo: 10, 
+    kalori: 11, 
+    nutrisi_flag: 12, 
+  };
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -93,75 +121,77 @@ const HeroSection = ({
   };
   
   const translateFiltersToArray = (filters: Record<string, string[]>) => {
-        const result = [0, 0, 0, 0, 0, 0, 0, -1, -1, -1, -1, -1, 0];
+    const result = [0, 0, 0, 0, 0, 0, 0, -1, -1, -1, -1, -1, 0];
 
-        (filters.taste || []).forEach((rasa) => {
-            const key = rasa.toLowerCase();
-            if (FILTER_INDEX_MAP[key] !== undefined) {
-            result[FILTER_INDEX_MAP[key]] = 1;
-            }
-        });
+    (filters.taste || []).forEach((rasa) => {
+      const key = rasa.toLowerCase();
+      if (FILTER_INDEX_MAP[key] !== undefined) {
+        result[FILTER_INDEX_MAP[key]] = 1;
+      }
+    });
 
-        const toNum = (val?: string) =>
-            val === 'Rendah' ? 0 :
-            val === 'Sedang' ? 0.5 :
-            val === 'Tinggi' ? 1 : -1;
+    const toNum = (val?: string) =>
+      val === 'Rendah' ? 0 :
+      val === 'Sedang' ? 0.5 :
+      val === 'Tinggi' ? 1 : -1;
 
-        const rangeCategories = ['lemak', 'protein', 'fat', 'karbo', 'kalori'];
+    const rangeCategories = ['lemak', 'protein', 'karbo', 'calories'];
 
-        rangeCategories.forEach((cat) => {
-            const value = filters[cat]?.[0];
-            if (value) {
-            result[FILTER_INDEX_MAP[cat]] = toNum(value);
-            }
-        });
+    rangeCategories.forEach((cat) => {
+      const value = filters[cat]?.[0];
+      if (value) {
+        const mappedKey = cat === 'calories' ? 'kalori' : cat;
+        result[FILTER_INDEX_MAP[mappedKey]] = toNum(value);
+      }
+    });
 
-        const hasRangeValue = rangeCategories.some((cat) => {
-            const idx = FILTER_INDEX_MAP[cat];
-            return result[idx] !== -1;
-        });
+    const hasRangeValue = rangeCategories.some((cat) => {
+      const mappedKey = cat === 'calories' ? 'kalori' : cat;
+      const idx = FILTER_INDEX_MAP[mappedKey];
+      return result[idx] !== -1;
+    });
 
-        if (hasRangeValue) {
-            result[FILTER_INDEX_MAP['nutrisi_flag']] = 1;
-        }
+    if (hasRangeValue) {
+      result[FILTER_INDEX_MAP['nutrisi_flag']] = 1;
+    }
 
-        return result;
-    };
+    return result;
+  };
 
-    useEffect(() => {
-        setFilterValue(translateFiltersToArray(selectedFilters));
-    }, [selectedFilters]);
+  useEffect(() => {
+    setFilterValue(translateFiltersToArray(selectedFilters));
+  }, [selectedFilters]);
 
   const filterModel = async(ids: string) => {
     const data = await fetch(`http://localhost:3000/api/${ids}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({"data": ids === "modelDirect" ? filterValue : searchQuery})
-    })
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({"data": ids === "modelDirect" ? filterValue : searchQuery})
+    });
     const res = await data.json();
     if (data.ok) {
-        searchData(res)       
+      setSearchData(res);
     }
     setLoading(false);
-  }
+  };
 
   const handleSearch = () => {
     if (!searchQuery.trim()) {
       if (Object.keys(selectedFilters).length !== 0) {
-        setLoading(true)
+        setLoading(true);
         filterModel("modelDirect");
-        return
+        return;
       }
       return;
     }
     setLoading(true);
     onSearch(searchQuery, selectedFilters);
-    filterModel("modelUndirect")
+    filterModel("modelUndirect");
   };
 
   const clearAllFilters = () => {
     setSelectedFilters({});
-    searchData({});
+    setSearchData({ data: [] });
   };
 
   const totalFiltersCount = Object.values(selectedFilters).flat().length;
@@ -262,14 +292,13 @@ const HeroSection = ({
           </div>
         </motion.div>
 
-        {/* Filter Buttons - COMPLETELY FIXED */}
+        {/* Filter Buttons */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
           className="mb-6 flex justify-center"
         >
-          {/* Filter Container dengan spacing yang konsisten */}
           <div className="flex flex-wrap items-center gap-3">
             {filterOptions.map((filter) => {
               const selectedCount = selectedFilters[filter.id]?.length || 0;
@@ -341,20 +370,20 @@ const HeroSection = ({
 
         {/* Clear Filters Button */}
         {totalFiltersCount > 0 && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="mt-4 flex items-center justify-center"
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="mt-4 flex items-center justify-center"
+          >
+            <button
+              onClick={clearAllFilters}
+              className="flex items-center gap-2 px-4 py-2 text-sm text-gray-600 hover:text-[#902E2B] hover:bg-red-50 rounded-lg transition-colors"
             >
-              <button
-                onClick={clearAllFilters}
-                className="flex items-center gap-2 px-4 py-2 text-sm text-gray-600 hover:text-[#902E2B] hover:bg-red-50 rounded-lg transition-colors"
-              >
-                <X className="w-4 h-4" />
-                <span>Hapus semua filter ({totalFiltersCount})</span>
-              </button>
-            </motion.div>
-          )}
+              <X className="w-4 h-4" />
+              <span>Hapus semua filter ({totalFiltersCount})</span>
+            </button>
+          </motion.div>
+        )}
       </div>
     </section>
   );

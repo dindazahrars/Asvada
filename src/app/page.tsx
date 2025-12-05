@@ -8,16 +8,30 @@ import SearchLimitBanner from '@/components/SearchLimitBanner';
 import Sidebar from '@/components/Sidebar';
 import RecommendedSection from '@/components/RecommendedSection';
 import Footer from '@/components/Footer';
-import { LogOut, User, Menu, Bell } from 'lucide-react';
+import { LogOut, User, Menu } from 'lucide-react';
 import Image from 'next/image';
-import ModelRecipeDetail from '@/components/ReceipeDetailPublicPage';
+
+interface Recipe {
+  id: number;
+  title: string;
+  description: string;
+  image_url: string;
+  cook_time: string | number;
+  difficulty: string;
+  servings: number;
+  user_id: string | null;
+}
+
+interface SearchData {
+  data: Recipe[];
+}
 
 export default function Home() {
   const { data: session, status } = useSession();
   const [searchCount, setSearchCount] = useState(0);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [ searchData, setSearchData ] = useState({});
+  const [searchData, setSearchData] = useState<SearchData>({ data: [] });
   
   const MAX_FREE_SEARCHES = 3;
   const isLoggedIn = status === 'authenticated';
@@ -53,7 +67,6 @@ export default function Home() {
     if (isLoggedIn) {
       console.log('✅ Logged in - Unlimited search');
       console.log('Search:', query, 'Filters:', filters);
-      // TODO: Implement actual search logic here
       return;
     }
 
@@ -72,7 +85,6 @@ export default function Home() {
     // Perform search
     console.log('✅ Search query:', query);
     console.log('✅ Filters:', filters);
-    // TODO: Implement actual search logic here
 
     // Show modal if limit reached after this search
     if (newCount >= MAX_FREE_SEARCHES) {
@@ -117,7 +129,6 @@ export default function Home() {
           <div className="flex items-center gap-3">
             {isLoggedIn && session?.user ? (
               <>
-
                 {/* User Profile */}
                 <div className="flex items-center gap-3">
                   <div className="flex items-center gap-2">
@@ -130,35 +141,29 @@ export default function Home() {
                         className="rounded-full ring-2 ring-orange-200"
                       />
                     ) : (
-                      <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-amber-600 rounded-full flex items-center justify-center shadow-md">
-                        <User className="w-5 h-5 text-white" />
+                      <div className="w-8 h-8 bg-orange-200 rounded-full flex items-center justify-center">
+                        <User className="w-4 h-4 text-orange-700" />
                       </div>
                     )}
-                    <div className="hidden sm:block">
-                      <p className="text-sm font-semibold text-gray-800">
-                        {session.user.name || 'User'}
-                      </p>
-                      <p className="text-xs text-green-600 font-medium">
-                        ✨ Unlimited Search
-                      </p>
-                    </div>
+                    <span className="text-sm font-medium text-gray-700 hidden sm:block">
+                      {session.user.name}
+                    </span>
                   </div>
-                  
+
                   {/* Logout Button */}
                   <button
                     onClick={() => signOut()}
-                    className="p-2 hover:bg-red-50 rounded-lg transition-colors group"
-                    title="Logout"
-                    aria-label="Logout"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                   >
-                    <LogOut className="w-5 h-5 text-gray-600 group-hover:text-red-600 transition-colors" />
+                    <LogOut className="w-4 h-4" />
+                    <span className="hidden sm:inline">Logout</span>
                   </button>
                 </div>
               </>
             ) : (
               <button
                 onClick={() => setShowLoginModal(true)}
-                className="px-5 py-2 bg-gradient-to-r from-orange-500 to-amber-600 text-white font-semibold rounded-lg hover:from-orange-600 hover:to-amber-700 transition-all shadow-md hover:shadow-lg transform hover:scale-105"
+                className="px-4 py-2 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-lg hover:from-orange-600 hover:to-red-600 transition-all shadow-md hover:shadow-lg font-medium"
               >
                 Login
               </button>
@@ -170,11 +175,17 @@ export default function Home() {
       {/* Sidebar */}
       <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
 
+      {/* Login Modal */}
+      <LoginModal
+        isOpen={showLoginModal}
+        onClose={() => setShowLoginModal(false)}
+      />
+
       {/* Main Content */}
       <main className="pt-20">
-        {/* Search Limit Banner (only for guests when searches left <= 1) */}
-        {!isLoggedIn && searchesLeft <= 1 && searchCount > 0 && (
-          <SearchLimitBanner 
+        {/* Search Limit Banner (only for guests) */}
+        {!isLoggedIn && (
+          <SearchLimitBanner
             searchesLeft={searchesLeft}
             maxSearches={MAX_FREE_SEARCHES}
             onLoginClick={() => setShowLoginModal(true)}
@@ -183,27 +194,19 @@ export default function Home() {
 
         {/* Hero Section */}
         <HeroSection 
-          onSearch={handleSearch}
+          onSearch={handleSearch} 
+          setSearchData={setSearchData}
           searchCount={searchCount}
           maxSearches={MAX_FREE_SEARCHES}
           isLoggedIn={isLoggedIn}
-		  searchData={setSearchData}
         />
 
         {/* Recommended Section */}
-        <RecommendedSection searchData={searchData}/>
+        <RecommendedSection searchData={searchData} />
       </main>
 
       {/* Footer */}
       <Footer />
-
-      {/* Login Modal */}
-      <LoginModal 
-        isOpen={showLoginModal}
-        onClose={() => setShowLoginModal(false)}
-        searchCount={searchCount}
-        maxSearches={MAX_FREE_SEARCHES}
-      />
     </div>
   );
 }
