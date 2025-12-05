@@ -140,7 +140,7 @@ export default function MyRecipesPage() {
               </div>
             </div>
             <button
-              onClick={() => router.push('/recipes/create')}
+              onClick={() => router.push('/my-recipes/create')}
               className="px-6 py-3 bg-gradient-to-r from-[#FE9412] to-[#902E2B] text-white rounded-xl hover:shadow-lg transition font-medium flex items-center gap-2"
             >
               <Plus className="w-5 h-5" />
@@ -203,7 +203,7 @@ export default function MyRecipesPage() {
                 Mulai berbagi resep favoritmu dengan dunia!
               </p>
               <button
-                onClick={() => router.push('/recipes/create')}
+                onClick={() => router.push('/my-recipes/create')}
                 className="px-8 py-3 bg-gradient-to-r from-[#FE9412] to-[#902E2B] text-white rounded-xl hover:shadow-lg transition font-medium inline-flex items-center gap-2"
               >
                 <Plus className="w-5 h-5" />
@@ -281,14 +281,14 @@ export default function MyRecipesPage() {
                   {/* Action Buttons */}
                   <div className="flex gap-2">
                     <button
-                      onClick={() => router.push(`/recipes/${recipe.id}`)}
+                      onClick={() => router.push(`/my-recipes/${recipe.id}`)}
                       className="flex-1 px-4 py-2 bg-gradient-to-r from-[#FE9412] to-[#902E2B] text-white rounded-xl hover:shadow-lg transition text-sm font-medium flex items-center justify-center gap-2"
                     >
                       <Eye className="w-4 h-4" />
                       Lihat
                     </button>
                     <button
-                      onClick={() => router.push(`/recipes/edit/${recipe.id}`)}
+                      onClick={() => router.push(`/my-recipes/edit/${recipe.id}`)}
                       className="px-4 py-2 bg-blue-500 text-white rounded-xl hover:bg-blue-600 transition"
                     >
                       <Edit className="w-4 h-4" />

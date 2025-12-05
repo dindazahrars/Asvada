@@ -22,10 +22,11 @@ interface Recipe {
   steps: string[];
   status: 'draft' | 'published';
   created_at: string;
-  users?: {
-    name: string;
-    email: string;
-  };
+}
+
+interface UserInfo {
+  name: string;
+  email: string;
 }
 
 export default function RecipeDetailPage() {
@@ -33,6 +34,7 @@ export default function RecipeDetailPage() {
   const params = useParams();
   const { data: session } = useSession();
   const [recipe, setRecipe] = useState<Recipe | null>(null);
+  const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [isOwner, setIsOwner] = useState(false);
   const supabase = createSupabaseBrowser();
@@ -47,41 +49,55 @@ export default function RecipeDetailPage() {
     setLoading(true);
 
     try {
-      const { data, error } = await supabase
+      // First, get the recipe
+      const { data: recipeData, error: recipeError } = await supabase
         .from('resep')
-        .select(`
-          *,
-          users (
-            name,
-            email
-          )
-        `)
+        .select('*')
         .eq('id', params.id)
         .single();
 
-      if (error) {
-        console.error('Error loading recipe:', error);
+      if (recipeError) {
+        console.error('Error loading recipe:', recipeError);
         alert('❌ Resep tidak ditemukan!');
         router.push('/my-recipes');
         return;
       }
 
-      setRecipe(data);
+      if (!recipeData) {
+        alert('❌ Resep tidak ditemukan!');
+        router.push('/my-recipes');
+        return;
+      }
+
+      setRecipe(recipeData);
+
+      // Then, get the user info separately
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('name, email')
+        .eq('id', recipeData.user_id)
+        .single();
+
+      if (!userError && userData) {
+        setUserInfo(userData);
+      }
 
       // Check if current user is the owner
       if (session?.user?.email) {
-        const { data: userData } = await supabase
+        const { data: currentUserData } = await supabase
           .from('users')
           .select('id')
           .eq('email', session.user.email)
           .single();
 
-        if (userData && userData.id === data.user_id) {
+        if (currentUserData && currentUserData.id === recipeData.user_id) {
           setIsOwner(true);
         }
       }
     } catch (error) {
       console.error('Error:', error);
+      alert('❌ Terjadi kesalahan saat memuat resep!');
+      router.push('/my-recipes');
     } finally {
       setLoading(false);
     }
@@ -107,6 +123,24 @@ export default function RecipeDetailPage() {
     } catch (error) {
       console.error('Error:', error);
       alert('❌ Terjadi kesalahan!');
+    }
+  };
+
+  const handleShare = () => {
+    const url = window.location.href;
+    if (navigator.share) {
+      navigator.share({
+        title: recipe?.title || 'Resep',
+        text: recipe?.description || '',
+        url: url,
+      }).catch((error) => {
+        // Fallback to clipboard if share fails
+        navigator.clipboard.writeText(url);
+        alert('✅ Link berhasil disalin!');
+      });
+    } else {
+      navigator.clipboard.writeText(url);
+      alert('✅ Link berhasil disalin!');
     }
   };
 
@@ -146,7 +180,14 @@ export default function RecipeDetailPage() {
       <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-red-50 py-8">
         <div className="max-w-5xl mx-auto px-4">
           <div className="text-center py-16">
-            <p className="text-gray-600">Resep tidak ditemukan</p>
+            <ChefHat className="w-24 h-24 text-gray-300 mx-auto mb-4" />
+            <p className="text-xl text-gray-600 font-semibold">Resep tidak ditemukan</p>
+            <button
+              onClick={() => router.push('/my-recipes')}
+              className="mt-6 px-6 py-3 bg-gradient-to-r from-[#FE9412] to-[#902E2B] text-white rounded-xl hover:shadow-lg transition font-medium"
+            >
+              Kembali ke Resep Saya
+            </button>
           </div>
         </div>
       </div>
@@ -173,6 +214,7 @@ export default function RecipeDetailPage() {
               alt={recipe.title}
               fill
               className="object-cover"
+              priority
             />
           ) : (
             <div className="flex items-center justify-center h-full bg-gradient-to-br from-orange-200 to-red-200">
@@ -194,6 +236,11 @@ export default function RecipeDetailPage() {
                   📝 Draft
                 </span>
               )}
+              {recipe.category && (
+                <span className="px-4 py-1.5 rounded-full text-sm font-semibold bg-white/20 backdrop-blur-sm text-white">
+                  {recipe.category}
+                </span>
+              )}
             </div>
             <h1 className="text-4xl font-bold mb-2">{recipe.title}</h1>
             <p className="text-white/90 text-lg">{recipe.description}</p>
@@ -204,7 +251,7 @@ export default function RecipeDetailPage() {
         {isOwner && (
           <div className="flex gap-3 mb-6">
             <button
-              onClick={() => router.push(`/recipes/edit/${recipe.id}`)}
+              onClick={() => router.push(`/my-recipes/edit/${recipe.id}`)}
               className="flex-1 px-6 py-3 bg-blue-500 text-white rounded-xl hover:bg-blue-600 transition font-medium flex items-center justify-center gap-2"
             >
               <Edit className="w-5 h-5" />
@@ -218,10 +265,7 @@ export default function RecipeDetailPage() {
               Hapus
             </button>
             <button
-              onClick={() => {
-                navigator.clipboard.writeText(window.location.href);
-                alert('✅ Link berhasil disalin!');
-              }}
+              onClick={handleShare}
               className="px-6 py-3 bg-gray-500 text-white rounded-xl hover:bg-gray-600 transition font-medium flex items-center gap-2"
             >
               <Share2 className="w-5 h-5" />
@@ -252,6 +296,15 @@ export default function RecipeDetailPage() {
                   <div>
                     <p className="text-sm text-gray-600">Waktu Memasak</p>
                     <p className="font-semibold text-gray-900">{recipe.cook_time} menit</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="p-3 bg-orange-100 rounded-xl">
+                    <Clock className="w-5 h-5 text-[#FE9412]" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Total Waktu</p>
+                    <p className="font-semibold text-gray-900">{recipe.prep_time + recipe.cook_time} menit</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
@@ -311,10 +364,10 @@ export default function RecipeDetailPage() {
             </div>
 
             {/* Author Info */}
-            {recipe.users && (
+            {userInfo && (
               <div className="mt-6 bg-white rounded-2xl shadow-md p-6 border border-orange-100">
                 <h3 className="text-sm font-semibold text-gray-600 mb-2">Dibuat oleh</h3>
-                <p className="text-lg font-bold text-gray-900">{recipe.users.name}</p>
+                <p className="text-lg font-bold text-gray-900">{userInfo.name}</p>
                 <p className="text-sm text-gray-500">
                   {new Date(recipe.created_at).toLocaleDateString('id-ID', {
                     day: 'numeric',
