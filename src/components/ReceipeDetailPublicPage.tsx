@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { Clock, Users, ChefHat, ArrowLeft, Share2, Bookmark, Heart, Star, Utensils, Timer, X } from 'lucide-react';
+import { Clock, Users, ChefHat, ArrowLeft, Share2, Bookmark, Heart, Timer, X, Utensils } from 'lucide-react';
 import Image from 'next/image';
 import { createSupabaseBrowser } from '@/lib/supabase_client';
 import { motion } from 'framer-motion';
@@ -11,7 +11,7 @@ import { useSession } from 'next-auth/react';
 // --- Interfaces ---
 interface Recipe {
   id: number;
-  user_id: string;
+  user_id?: string;
   title: string;
   description: string;
   image_url: string | null;
@@ -22,11 +22,12 @@ interface Recipe {
   category: string | null;
   ingredients: string[];
   steps: string[];
-  status: 'draft' | 'published';
+  status?: 'draft' | 'published';
   created_at: string;
-  // Field optional untuk data dari search/model yang mungkin beda format
+  // Field optional untuk handling dataset/modal
   Title?: string;
   Loves?: number;
+  is_dataset?: boolean; // Flag untuk menandai sumber data
 }
 
 interface UserInfo {
@@ -36,7 +37,7 @@ interface UserInfo {
 
 interface Props {
   recipe?: any;
-  onClose?: () => void; // Untuk mode Modal
+  onClose?: () => void;
   open?: boolean;
 }
 
@@ -54,29 +55,45 @@ export default function RecipeDetailPublicPage({ recipe: propRecipe, onClose }: 
   const supabase = createSupabaseBrowser();
   const isModal = !!propRecipe; // Deteksi apakah sedang dalam mode Modal
 
-  // 1. SETUP DATA (Handle Mode Modal vs Halaman URL)
+  // 1. SETUP DATA
   useEffect(() => {
     const initData = async () => {
       setLoading(true);
 
       if (propRecipe) {
-        // A. MODE MODAL
+        // A. MODE MODAL (Data dilempar via props)
         const normalizedRecipe: any = {
           ...propRecipe,
+          id: propRecipe.id,
           title: propRecipe.title || propRecipe.Title,
+          description: propRecipe.description || 'Deskripsi tidak tersedia',
+          image_url: propRecipe.image_url || propRecipe.image,
           prep_time: propRecipe.prep_time || 15,
           cook_time: propRecipe.cook_time || 30,
           servings: propRecipe.servings || 2,
-          ingredients: propRecipe.ingredients || ['Bahan tidak tersedia'],
-          steps: propRecipe.steps || ['Langkah tidak tersedia'],
-          created_at: propRecipe.created_at || new Date().toISOString()
+          difficulty: propRecipe.difficulty || 'Medium',
+          category: propRecipe.category || propRecipe.Category || 'Umum',
+          
+          // Handling ingredients string vs array
+          ingredients: Array.isArray(propRecipe.ingredients) 
+            ? propRecipe.ingredients 
+            : (propRecipe.ingredients ? propRecipe.ingredients.split(',') : ['Bahan tidak tersedia']),
+            
+          // Handling steps string vs array
+          steps: Array.isArray(propRecipe.steps) 
+            ? propRecipe.steps 
+            : (propRecipe.steps ? propRecipe.steps.split('\n') : ['Langkah tidak tersedia']),
+            
+          created_at: propRecipe.created_at || new Date().toISOString(),
+          is_dataset: propRecipe.is_dataset || false
         };
+        
         setRecipe(normalizedRecipe);
         if (normalizedRecipe.user_id) fetchUserInfo(normalizedRecipe.user_id);
         setLoading(false);
 
       } else if (params.id) {
-        // B. MODE HALAMAN
+        // B. MODE HALAMAN (Fetch dari DB berdasarkan URL ID)
         await loadRecipeFromDb(params.id as string);
       }
     };
@@ -84,9 +101,10 @@ export default function RecipeDetailPublicPage({ recipe: propRecipe, onClose }: 
     initData();
   }, [params.id, propRecipe]);
 
-  // 2. TRIGGER HISTORY (Saat resep & session siap)
+  // 2. TRIGGER HISTORY
   useEffect(() => {
-    if (recipe?.id && status === 'authenticated') {
+    // Hanya catat history jika user login DAN resep bukan dataset (atau sesuaikan logic backend jika support dataset ID)
+    if (recipe?.id && status === 'authenticated' && !recipe.is_dataset) {
       addToHistory(recipe.id);
     }
   }, [recipe, status]);
@@ -96,43 +114,76 @@ export default function RecipeDetailPublicPage({ recipe: propRecipe, onClose }: 
     if (data) setUserInfo(data);
   };
 
+  // --- LOGIKA UTAMA PERBAIKAN FETCH DB ---
   const loadRecipeFromDb = async (id: string) => {
     try {
-      const { data, error } = await supabase.from('resep').select('*').eq('id', id).single();
-      if (error || !data) throw new Error('Not found');
-      setRecipe(data);
-      if (data.user_id) fetchUserInfo(data.user_id);
+      // 1. Coba Cari di Tabel 'resep' (User Upload)
+      const { data: appData, error: appError } = await supabase
+        .from('resep')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+      if (appData) {
+        setRecipe({ ...appData, is_dataset: false });
+        if (appData.user_id) fetchUserInfo(appData.user_id);
+      } else {
+        // 2. Jika Gagal, Coba Cari di Tabel 'dataset' (AI)
+        console.log("Mencari di dataset...");
+        const { data: dsData, error: dsError } = await supabase
+          .from('dataset')
+          .select('*')
+          .eq('id', id)
+          .single();
+
+        if (dsError || !dsData) throw new Error('Not found in both tables');
+
+        // Mapping Data Dataset ke format Recipe UI
+        const mappedRecipe: any = {
+          id: dsData.id,
+          title: dsData.title_cleaned || 'Tanpa Judul',
+          description: `Resep Dataset AI. Kalori: ${dsData.calories || '-'}`,
+          image_url: dsData.image_url,
+          prep_time: dsData.prep_time || 15,
+          cook_time: dsData.cook_time || 30,
+          servings: dsData.servings || 4,
+          difficulty: 'Medium',
+          category: 'Dataset AI',
+          
+          // Parsing string ke array
+          ingredients: dsData.ingredients_cleaned ? dsData.ingredients_cleaned.split(',') : [],
+          steps: dsData.steps ? dsData.steps.split('\n') : ['Lihat detail pada sumber asli.'],
+          
+          created_at: new Date().toISOString(),
+          is_dataset: true, // Penanda penting
+          user_id: null
+        };
+
+        setRecipe(mappedRecipe);
+        setUserInfo({ name: "Asvada AI", email: "ai@system" });
+      }
     } catch (error) {
-      console.error('Error load recipe:', error);
+      console.error('Error loading recipe:', error);
       alert('❌ Resep tidak ditemukan!');
       router.push('/');
     } finally {
       setLoading(false);
     }
   };
+const addToHistory = async (recipeId: number) => {
+    if (!session?.user) return;
 
-     const addToHistory = async (recipeId: number) => {
-      if (!session?.user) return;
-
-      try {
-        const res = await fetch('/api/history', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ recipeId })
-        });
-
-        // BACA RESPON
-        const data = await res.json().catch(() => null); // Cegah error parse JSON
-
-        if (!res.ok) {
-          console.error("⚠️ Error API:", data || "Server Error (No JSON)");
-        } else {
-          console.log("✅ History tersimpan (Server Response):", data);
-        }
-      } catch (error) {
-        console.error('🔥 Fetch Error:', error);
-      }
-    };
+    try {
+      const res = await fetch('/api/history', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ recipeId })
+      });
+      // ... handling response
+    } catch (error) {
+      console.error('🔥 Fetch Error:', error);
+    }
+  };
 
   const handleShare = () => {
     const url = window.location.href;
@@ -141,18 +192,15 @@ export default function RecipeDetailPublicPage({ recipe: propRecipe, onClose }: 
         title: recipe?.title || 'Resep',
         text: recipe?.description || '',
         url: url,
-      }).catch(() => {
-        navigator.clipboard.writeText(url);
-        alert('✅ Link berhasil disalin!');
-      });
+      }).catch(() => navigator.clipboard.writeText(url));
     } else {
       navigator.clipboard.writeText(url);
-      alert('✅ Link berhasil disalin!');
+      alert('✅ Link disalin!');
     }
   };
 
   const getDifficultyColor = (difficulty: string) => {
-    const d = difficulty?.toLowerCase();
+    const d = difficulty?.toLowerCase() || 'medium';
     switch (d) {
       case 'easy': return 'bg-emerald-500';
       case 'medium': return 'bg-amber-500';
@@ -162,7 +210,7 @@ export default function RecipeDetailPublicPage({ recipe: propRecipe, onClose }: 
   };
 
   const getDifficultyText = (difficulty: string) => {
-    const d = difficulty?.toLowerCase();
+    const d = difficulty?.toLowerCase() || 'medium';
     switch (d) {
       case 'easy': return 'Mudah';
       case 'medium': return 'Sedang';
@@ -180,7 +228,7 @@ export default function RecipeDetailPublicPage({ recipe: propRecipe, onClose }: 
             transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
             className="w-16 h-16 border-4 border-[#FE9412] border-t-transparent rounded-full mx-auto mb-4"
           />
-          <p className="text-gray-600 font-medium">Memuat resep lezat...</p>
+          <p className="text-gray-600 font-medium">Memuat resep...</p>
         </div>
       </div>
     );
@@ -188,27 +236,22 @@ export default function RecipeDetailPublicPage({ recipe: propRecipe, onClose }: 
 
   if (!recipe) return null;
 
-  // --- Render Konten Utama ---
+  // --- CONTENT RENDER ---
   const Content = (
     <div className={`bg-gradient-to-br from-orange-50 via-amber-50 to-red-50 ${isModal ? 'min-h-full pb-10' : 'min-h-screen'}`}>
       {/* Hero Section */}
       <div className="relative h-[60vh] min-h-[500px]">
-        {recipe.image_url ? (
-          <Image
-            src={recipe.image_url}
-            alt={recipe.title}
-            fill
-            className="object-cover"
-            priority
-          />
-        ) : (
-          <div className="w-full h-full bg-gradient-to-br from-orange-300 via-amber-300 to-red-300 flex items-center justify-center">
-            <ChefHat className="w-32 h-32 text-white/50" />
-          </div>
-        )}
+        <Image
+          src={recipe.image_url || '/logo.png'}
+          alt={recipe.title}
+          fill
+          className="object-cover"
+          priority
+          unoptimized={recipe.is_dataset} // Optimize false untuk gambar eksternal dataset
+        />
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
         
-        {/* Tombol Back / Close */}
+        {/* Navigation / Close Button */}
         <button
           onClick={() => isModal ? onClose?.() : router.back()}
           className="absolute top-6 left-6 p-3 bg-white/90 backdrop-blur-sm rounded-full shadow-lg hover:bg-white transition z-20"
@@ -218,126 +261,86 @@ export default function RecipeDetailPublicPage({ recipe: propRecipe, onClose }: 
 
         {/* Action Buttons */}
         <div className="absolute top-6 right-6 flex gap-3 z-20">
-          <button
-            onClick={() => setIsLiked(!isLiked)}
-            className={`p-3 backdrop-blur-sm rounded-full shadow-lg transition ${
-              isLiked ? 'bg-red-500 text-white' : 'bg-white/90 text-gray-900 hover:bg-white'
-            }`}
-          >
+          <button onClick={() => setIsLiked(!isLiked)} className={`p-3 rounded-full shadow-lg transition ${isLiked ? 'bg-red-500 text-white' : 'bg-white/90 text-gray-900'}`}>
             <Heart className={`w-5 h-5 ${isLiked ? 'fill-current' : ''}`} />
           </button>
-          <button
-            onClick={() => setIsBookmarked(!isBookmarked)}
-            className={`p-3 backdrop-blur-sm rounded-full shadow-lg transition ${
-              isBookmarked ? 'bg-[#FE9412] text-white' : 'bg-white/90 text-gray-900 hover:bg-white'
-            }`}
-          >
+          <button onClick={() => setIsBookmarked(!isBookmarked)} className={`p-3 rounded-full shadow-lg transition ${isBookmarked ? 'bg-[#FE9412] text-white' : 'bg-white/90 text-gray-900'}`}>
             <Bookmark className={`w-5 h-5 ${isBookmarked ? 'fill-current' : ''}`} />
           </button>
-          <button onClick={handleShare} className="p-3 bg-white/90 backdrop-blur-sm rounded-full shadow-lg hover:bg-white transition">
+          <button onClick={handleShare} className="p-3 bg-white/90 rounded-full shadow-lg hover:bg-white transition">
             <Share2 className="w-5 h-5 text-gray-900" />
           </button>
         </div>
 
-        {/* Title Info */}
+        {/* Title & Meta Info */}
         <div className="absolute bottom-0 left-0 right-0 p-8 text-white z-10">
           <div className="max-w-6xl mx-auto">
             <div className="flex flex-wrap items-center gap-3 mb-4">
               <span className={`px-4 py-2 ${getDifficultyColor(recipe.difficulty)} text-white rounded-full text-sm font-bold shadow-lg`}>
                 {getDifficultyText(recipe.difficulty)}
               </span>
-              {recipe.category && (
-                <span className="px-4 py-2 bg-white/20 backdrop-blur-md text-white rounded-full text-sm font-bold shadow-lg">
-                  {recipe.category}
-                </span>
+              <span className="px-4 py-2 bg-white/20 backdrop-blur-md text-white rounded-full text-sm font-bold shadow-lg">
+                {recipe.category || 'Umum'}
+              </span>
+              {recipe.is_dataset && (
+                 <span className="px-4 py-2 bg-blue-600 text-white rounded-full text-sm font-bold shadow-lg flex items-center gap-1">
+                    AI Dataset
+                 </span>
               )}
             </div>
-            <h1 className="text-4xl md:text-5xl font-bold mb-3 drop-shadow-lg">{recipe.title}</h1>
-            <p className="text-lg md:text-xl text-white/90 mb-6 max-w-3xl">{recipe.description}</p>
+            
+            <h1 className="text-4xl md:text-5xl font-bold mb-3 drop-shadow-lg capitalize">{recipe.title}</h1>
+            <p className="text-lg md:text-xl text-white/90 mb-6 max-w-3xl line-clamp-2">{recipe.description}</p>
             
             <div className="flex flex-wrap gap-6">
               <div className="flex items-center gap-3">
-                <div className="p-3 bg-white/20 backdrop-blur-md rounded-xl">
-                  <Timer className="w-6 h-6" />
-                </div>
-                <div>
-                  <p className="text-sm text-white/80">Prep Time</p>
-                  <p className="font-bold text-lg">{recipe.prep_time} min</p>
-                </div>
+                <div className="p-3 bg-white/20 backdrop-blur-md rounded-xl"><Timer className="w-6 h-6" /></div>
+                <div><p className="text-sm text-white/80">Prep</p><p className="font-bold text-lg">{recipe.prep_time}m</p></div>
               </div>
               <div className="flex items-center gap-3">
-                <div className="p-3 bg-white/20 backdrop-blur-md rounded-xl">
-                  <Clock className="w-6 h-6" />
-                </div>
-                <div>
-                  <p className="text-sm text-white/80">Cook Time</p>
-                  <p className="font-bold text-lg">{recipe.cook_time} min</p>
-                </div>
+                <div className="p-3 bg-white/20 backdrop-blur-md rounded-xl"><Clock className="w-6 h-6" /></div>
+                <div><p className="text-sm text-white/80">Cook</p><p className="font-bold text-lg">{recipe.cook_time}m</p></div>
               </div>
               <div className="flex items-center gap-3">
-                <div className="p-3 bg-white/20 backdrop-blur-md rounded-xl">
-                  <Users className="w-6 h-6" />
-                </div>
-                <div>
-                  <p className="text-sm text-white/80">Servings</p>
-                  <p className="font-bold text-lg">{recipe.servings} orang</p>
-                </div>
+                <div className="p-3 bg-white/20 backdrop-blur-md rounded-xl"><Users className="w-6 h-6" /></div>
+                <div><p className="text-sm text-white/80">Servings</p><p className="font-bold text-lg">{recipe.servings}</p></div>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Content Section */}
+      {/* Main Content */}
       <div className="max-w-6xl mx-auto px-4 py-12">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Ingredients */}
+          
+          {/* Left Column: Ingredients & Author */}
           <div className="lg:col-span-1">
-            <motion.div
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              className="bg-white rounded-3xl shadow-xl p-8 sticky top-8 border-2 border-orange-100"
-            >
+            <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} className="bg-white rounded-3xl shadow-xl p-8 sticky top-8 border-2 border-orange-100">
               <div className="flex items-center gap-3 mb-6">
-                <div className="p-3 bg-gradient-to-br from-[#FE9412] to-[#902E2B] rounded-2xl">
-                  <Utensils className="w-6 h-6 text-white" />
-                </div>
+                <div className="p-3 bg-gradient-to-br from-[#FE9412] to-[#902E2B] rounded-2xl"><Utensils className="w-6 h-6 text-white" /></div>
                 <h2 className="text-2xl font-bold text-gray-900">Bahan-Bahan</h2>
               </div>
               
               <div className="space-y-3">
-                {recipe.ingredients.map((ingredient, index) => (
-                  <motion.div
-                    key={index}
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: index * 0.05 }}
-                    className="flex items-start gap-3 p-3 rounded-xl hover:bg-orange-50 transition group"
-                  >
-                    <div className="flex-shrink-0 w-7 h-7 bg-gradient-to-br from-orange-400 to-red-400 text-white rounded-full flex items-center justify-center text-sm font-bold shadow-md group-hover:scale-110 transition">
-                      {index + 1}
-                    </div>
-                    <span className="text-gray-700 leading-relaxed flex-1">{ingredient}</span>
-                  </motion.div>
+                {recipe.ingredients.map((ing, i) => (
+                  <div key={i} className="flex items-start gap-3 p-3 rounded-xl hover:bg-orange-50 transition">
+                    <div className="flex-shrink-0 w-7 h-7 bg-gradient-to-br from-orange-400 to-red-400 text-white rounded-full flex items-center justify-center text-sm font-bold shadow-md">{i + 1}</div>
+                    <span className="text-gray-700 leading-relaxed capitalize">{ing}</span>
+                  </div>
                 ))}
               </div>
 
               {userInfo && (
                 <div className="mt-8 pt-8 border-t-2 border-orange-100">
-                  <p className="text-sm font-semibold text-gray-500 mb-3">DIBUAT OLEH</p>
+                  <p className="text-sm font-semibold text-gray-500 mb-3">SUMBER RESEP</p>
                   <div className="flex items-center gap-3">
                     <div className="w-12 h-12 bg-gradient-to-br from-[#FE9412] to-[#902E2B] rounded-full flex items-center justify-center">
                       <ChefHat className="w-6 h-6 text-white" />
                     </div>
                     <div>
                       <p className="font-bold text-gray-900">{userInfo.name}</p>
-                      <p className="text-sm text-gray-500">
-                        {new Date(recipe.created_at).toLocaleDateString('id-ID', {
-                          day: 'numeric',
-                          month: 'long',
-                          year: 'numeric'
-                        })}
-                      </p>
+                      <p className="text-sm text-gray-500">{new Date(recipe.created_at).toLocaleDateString('id-ID', { dateStyle: 'long' })}</p>
                     </div>
                   </div>
                 </div>
@@ -345,74 +348,50 @@ export default function RecipeDetailPublicPage({ recipe: propRecipe, onClose }: 
             </motion.div>
           </div>
 
-          {/* Steps */}
+          {/* Right Column: Steps */}
           <div className="lg:col-span-2">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="bg-white rounded-3xl shadow-xl p-8 border-2 border-orange-100"
-            >
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-3xl shadow-xl p-8 border-2 border-orange-100">
               <div className="flex items-center gap-3 mb-8">
-                <div className="p-3 bg-gradient-to-br from-[#FE9412] to-[#902E2B] rounded-2xl">
-                  <ChefHat className="w-6 h-6 text-white" />
-                </div>
+                <div className="p-3 bg-gradient-to-br from-[#FE9412] to-[#902E2B] rounded-2xl"><ChefHat className="w-6 h-6 text-white" /></div>
                 <h2 className="text-2xl font-bold text-gray-900">Cara Memasak</h2>
               </div>
 
               <div className="space-y-8">
-                {recipe.steps.map((step, index) => (
-                  <motion.div
-                    key={index}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.1 }}
-                    className="flex gap-6 group"
-                  >
+                {recipe.steps.map((step, i) => (
+                  <div key={i} className="flex gap-6 group">
                     <div className="flex-shrink-0">
-                      <div className="w-14 h-14 bg-gradient-to-br from-[#FE9412] to-[#902E2B] text-white rounded-2xl flex items-center justify-center font-bold text-xl shadow-lg group-hover:scale-110 transition">
-                        {index + 1}
-                      </div>
+                      <div className="w-14 h-14 bg-gradient-to-br from-[#FE9412] to-[#902E2B] text-white rounded-2xl flex items-center justify-center font-bold text-xl shadow-lg group-hover:scale-110 transition">{i + 1}</div>
                     </div>
                     <div className="flex-1 pt-2">
-                      <div className="bg-gradient-to-br from-orange-50 to-red-50 rounded-2xl p-6 group-hover:shadow-md transition">
-                        <p className="text-gray-800 leading-relaxed text-lg">{step}</p>
+                      <div className="bg-gradient-to-br from-orange-50 to-red-50 rounded-2xl p-6">
+                        <p className="text-gray-800 leading-relaxed text-lg">{step.replace(/^\d+\)\s*/, '')}</p>
                       </div>
                     </div>
-                  </motion.div>
+                  </div>
                 ))}
               </div>
 
-              {/* Tips Section */}
               <div className="mt-12 p-6 bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl border-2 border-amber-200">
-                <h3 className="font-bold text-lg text-gray-900 mb-3 flex items-center gap-2">
-                  💡 Tips Memasak
-                </h3>
-                <ul className="space-y-2 text-gray-700">
-                  <li className="flex items-start gap-2">
-                    <span className="text-[#FE9412] font-bold">•</span>
-                    <span>Pastikan semua bahan sudah disiapkan sebelum mulai memasak</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-[#FE9412] font-bold">•</span>
-                    <span>Ikuti langkah-langkah dengan urutan yang benar</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-[#FE9412] font-bold">•</span>
-                    <span>Sesuaikan tingkat kepedasan sesuai selera</span>
-                  </li>
+                <h3 className="font-bold text-lg text-gray-900 mb-3">💡 Tips Memasak</h3>
+                <ul className="space-y-2 text-gray-700 list-disc list-inside">
+                  <li>Siapkan semua bahan sebelum mulai.</li>
+                  <li>Sesuaikan rasa (garam/gula) di akhir proses memasak.</li>
+                  <li>Gunakan api sedang agar matang merata.</li>
                 </ul>
               </div>
             </motion.div>
           </div>
+
         </div>
       </div>
     </div>
   );
 
+  // Jika mode modal, wrap dengan overlay
   if (isModal) {
     return (
       <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-        <div className="min-h-full w-full bg-white md:rounded-t-3xl md:mt-20 overflow-hidden relative">
+        <div className="min-h-full w-full bg-white md:rounded-t-3xl md:mt-20 overflow-hidden relative shadow-2xl">
             {Content}
         </div>
       </div>

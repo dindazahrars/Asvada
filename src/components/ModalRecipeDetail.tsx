@@ -81,9 +81,7 @@ export default function ModalRecipeDetail({ open, onClose, recipe }: ModalProps)
                 <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide ${getDifficultyColor(difficulty)}`}>
                   {difficulty}
                 </span>
-                <span className="px-3 py-1 rounded-full bg-white/20 backdrop-blur-md text-xs font-bold border border-white/30">
-                  {recipe.Category || 'Dataset AI'}
-                </span>
+             
               </div>
 
               <h1 className="text-3xl font-extrabold mb-1">{recipe.Title}</h1>

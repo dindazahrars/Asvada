@@ -125,7 +125,7 @@ export default function HistoryPage() {
       const modalData = {
         "Title": item.title,
         "image_url": item.image_url,
-        "Category": "Dataset AI",
+        "Category": "",
         "URL": "#", 
         "Loves": 0,
         
@@ -216,7 +216,7 @@ export default function HistoryPage() {
                       item.type === 'local' ? 'bg-orange-500' : 'bg-blue-600'
                   }`}>
                     {item.type === 'local' ? <BookOpen size={10} /> : <Search size={10} />}
-                    {item.type === 'local' ? 'Resep App' : 'Dataset AI'}
+                   
                   </div>
                 </div>
 
@@ -226,12 +226,7 @@ export default function HistoryPage() {
                     {item.title}
                   </h3>
                   
-                  {/* Info Khusus Dataset */}
-                  {item.type === 'dataset' && (
-                       <p className="text-[10px] text-blue-600 mb-3 bg-blue-50 px-2 py-1 rounded inline-block font-medium">
-                          Klik untuk Detail AI
-                       </p>
-                  )}
+                
 
                   {/* Info Khusus Local */}
                   {item.type === 'local' && item.details && (

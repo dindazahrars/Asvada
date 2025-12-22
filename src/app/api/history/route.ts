@@ -4,252 +4,187 @@ import { authOptions } from "@/lib/auth";
 import { createClient } from "@supabase/supabase-js";
 
 // ============================================================================
-// 1. GET METHOD: Fetch History (Untuk Menampilkan Data di Frontend + Debugging)
+// 1. GET METHOD (Untuk menampilkan list history - Tidak Berubah)
 // ============================================================================
 export async function GET(req: Request) {
-  console.log("\n👀 [API GET HISTORY] =========================================");
-  console.log("👀 [API GET HISTORY] User mengakses halaman History...");
-
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-  if (!url || !serviceKey) {
-    return NextResponse.json({ error: "Server Config Error" }, { status: 500 });
-  }
+  if (!url || !serviceKey) return NextResponse.json({ error: "Config Error" }, { status: 500 });
 
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
-      console.log("❌ [API GET] Unauthorized");
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    if (!session?.user?.email) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const supabaseAdmin = createClient(url, serviceKey, {
-      auth: { autoRefreshToken: false, persistSession: false }
-    });
+    const supabaseAdmin = createClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } });
 
-    // A. Ambil User ID
-    const { data: userData } = await supabaseAdmin
-      .from("users")
-      .select("id, email")
-      .eq("email", session.user.email)
-      .single();
-
+    // Ambil User ID
+    const { data: userData } = await supabaseAdmin.from("users").select("id").eq("email", session.user.email).single();
     if (!userData) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
-    console.log("👤 [DEBUG USER] Email:", userData.email);
-    console.log("🔑 [DEBUG USER] UUID :", userData.id);
-
-    // B. Fetch History AI (Dataset)
-    console.log("📋 [DEBUG DB] Fetching 'history_ai'...");
+    // Fetch dari history_ai
     const { data: aiData } = await supabaseAdmin
       .from("history_ai")
       .select("*")
       .eq("user_id", userData.id)
       .order("access_time_history", { ascending: false });
 
-    // C. Fetch History Local (Resep App)
-    console.log("📋 [DEBUG DB] Fetching 'history' (Local App)...");
-    const { data: localData } = await supabaseAdmin
-      .from("history")
-      .select(`
-        id_recipe, 
-        created_at, 
-        resep:resep ( id, title, image_url, cook_time, servings, difficulty )
-      `)
-      .eq("id_user", userData.id)
-      .order("created_at", { ascending: false });
-
-    // --- LOGGING DATA KE TERMINAL ---
-    console.log(`📊 [RESULT] Ditemukan: ${aiData?.length || 0} History AI, ${localData?.length || 0} History Local`);
-    
-    // D. Siapkan Data untuk Frontend (Gabung & Ambil Detail Dataset)
-    let datasetItems: any[] = [];
-    if (aiData && aiData.length > 0) {
-        const datasetIds = aiData.map((h: any) => h.dataset_resep_id);
-        
-        // PENTING: Ambil kolom lengkap dari dataset agar Modal bisa tampil!
-        // Pastikan nama kolom sesuai DB Anda (steps, ingredients_cleaned, dll)
-        const { data: datasets } = await supabaseAdmin
-            .from("dataset")
-            .select("id, title_cleaned, ingredients_cleaned, image_url, steps, prep_time, cook_time, servings, calories")
-            .in("id", datasetIds);
-        
-        datasetItems = aiData.map((h: any) => {
-            const detail = datasets?.find((d: any) => d.id === h.dataset_resep_id);
-            return {
-                uniqueId: `dataset-${h.dataset_resep_id}-${h.access_time_history}`,
-                type: 'dataset',
-                id: h.dataset_resep_id,
-                title: detail?.title_cleaned || h.title || 'Dataset Item',
-                image_url: detail?.image_url || null,
-                date: h.access_time_history,
-                
-                // DATA LENGKAP UNTUK MODAL
-                full_detail: detail 
-            };
-        });
-    }
-
-    // Format Data Local
-    const localItems = (localData || []).map((item: any) => ({
-        uniqueId: `local-${item.id_recipe}-${item.created_at}`,
-        type: 'local',
-        id: item.id_recipe,
-        title: item.resep?.title || 'Resep Tidak Ditemukan',
-        image_url: item.resep?.image_url,
-        date: item.created_at,
-        details: {
-            difficulty: item.resep?.difficulty,
-            cook_time: item.resep?.cook_time,
-            servings: item.resep?.servings
+    // Mapping Data
+    const items = aiData?.map((h: any) => ({
+        uniqueId: `ai-${h.dataset_resep_id}-${h.access_time_history}`,
+        type: 'dataset', // Dianggap dataset agar memicu Modal
+        id: h.dataset_resep_id,
+        title: h.title,
+        image_url: h.image_url,
+        date: h.access_time_history,
+        full_detail: {
+            title_cleaned: h.title,
+            image_url: h.image_url,
+            ingredients_cleaned: h.bahan,
+            steps: h.cara_memasak
         }
-    })).filter((item: any) => item.title !== 'Resep Tidak Ditemukan');
+    })) || [];
 
-    // Gabung & Sort
-    const combined = [...localItems, ...datasetItems].sort((a, b) => 
-        new Date(b.date).getTime() - new Date(a.date).getTime()
-    );
-    
-    console.log("✅ [API GET] Selesai mengirim data.");
-    console.log("----------------------------------------------------------\n");
-
-    return NextResponse.json({ data: combined });
+    return NextResponse.json({ data: items });
 
   } catch (err: any) {
-    console.error("🔥 [API ERROR]", err);
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
 
-
 // ============================================================================
-// 2. POST METHOD: Simpan History & Cari Kecocokan Dataset
+// 2. POST METHOD: HYBRID (Direct Save & Local Lookup)
 // ============================================================================
 export async function POST(req: Request) {
-  console.log("\n🚀 [API POST HISTORY] =========================================");
-  console.log("🚀 [API POST HISTORY] Request masuk (User membuka resep)...");
+  console.log("\n🚀 [API POST HISTORY] Request masuk...");
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-  if (!url || !serviceKey) {
-    return NextResponse.json({ error: "Server Config Error" }, { status: 500 });
-  }
+  if (!url || !serviceKey) return NextResponse.json({ error: "Config Error" }, { status: 500 });
 
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    if (!session?.user?.email) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const { recipeId } = await req.json();
+    // TERIMA BODY (Bisa berisi data lengkap ATAU hanya recipeId)
+    const body = await req.json();
 
     const supabaseAdmin = createClient(url, serviceKey, {
       auth: { autoRefreshToken: false, persistSession: false }
     });
 
-    // A. Cari User ID
+    // 1. Ambil User ID
     const { data: userData } = await supabaseAdmin
       .from("users")
-      .select("id, email")
+      .select("id")
       .eq("email", session.user.email)
       .single();
 
     if (!userData) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
-    console.log("👤 [USER INFO] Email:", userData.email);
 
-    // B. Simpan ke tabel 'history' (Resep Aplikasi)
-    const { error: mainHistoryError } = await supabaseAdmin
-      .from("history")
-      .insert({
-        id_user: userData.id,
-        id_recipe: Number(recipeId),
-        created_at: new Date().toISOString()
-      });
+    // ========================================================================
+    // SKENARIO A: DIRECT SAVE (Dari Card Recipe AI/Model)
+    // Frontend mengirimkan flag 'save_mode: direct_save' dan data lengkap
+    // ========================================================================
+    if (body.save_mode === 'direct_save') {
+        console.log(`📥 [JALUR 1: DIRECT] Menyimpan data kiriman frontend: "${body.title}"`);
 
-    if (mainHistoryError) {
-      console.error("❌ [Main History] Gagal simpan:", mainHistoryError.message);
-    } else {
-      console.log("✅ [Main History] Tersimpan di tabel 'history'");
-    }
+        const { error } = await supabaseAdmin
+            .from("history_ai")
+            .insert({
+                user_id: userData.id,
+                dataset_resep_id: Number(body.dataset_resep_id) || 0,
+                title: body.title,
+                access_time_history: new Date().toISOString(),
+                // Simpan data mentah dari Frontend
+                image_url: body.image_url,
+                bahan: body.bahan,
+                cara_memasak: body.cara_memasak
+            });
 
-    // C. Cari & Simpan ke 'history_ai' (Dataset)
-    // Ambil Nama Resep Aplikasi
-    const { data: appRecipe } = await supabaseAdmin
-      .from("resep")
-      .select("title")
-      .eq("id", recipeId)
-      .single();
-
-    if (!appRecipe) {
-        return NextResponse.json({ message: "Recipe ID not found" });
-    }
-
-    const fullTitle = appRecipe.title; 
-    console.log(`🔍 [Dataset Search] Mencari: "${fullTitle}"`);
-
-    // Logika Smart Search
-    let datasetRecipe = null;
-
-    // 1. Exact Match
-    const { data: exact } = await supabaseAdmin
-      .from("dataset")
-      .select("id, title_cleaned")
-      .ilike("title_cleaned", `%${fullTitle}%`)
-      .limit(1)
-      .single();
-    
-    if (exact) {
-        datasetRecipe = exact;
-        console.log("   ✅ Match (Exact):", exact.title_cleaned);
-    }
-    
-    // 2. Fuzzy Match (2 kata pertama)
-    if (!datasetRecipe) {
-       const words = fullTitle.split(" ");
-       if (words.length > 0) {
-         const keyword = words.slice(0, Math.min(words.length, 2)).join(" ");
-         const { data: fuzzy } = await supabaseAdmin
-          .from("dataset")
-          .select("id, title_cleaned")
-          .ilike("title_cleaned", `%${keyword}%`)
-          .limit(1)
-          .single();
-         if (fuzzy) {
-             datasetRecipe = fuzzy;
-             console.log("   ✅ Match (Fuzzy):", fuzzy.title_cleaned);
-         }
-       }
-    }
-
-    if (datasetRecipe) {
-        // Simpan ke history_ai
-        const { error: aiError } = await supabaseAdmin
-          .from("history_ai")
-          .insert({
-              user_id: userData.id,
-              dataset_resep_id: datasetRecipe.id,
-              title: fullTitle,
-              access_time_history: new Date().toISOString()
-          });
-        
-        if (!aiError) {
-            console.log(`🎉 [History AI] Tersimpan! Linked ke Dataset ID: ${datasetRecipe.id}`);
-        } else {
-            console.error("❌ [History AI] Gagal simpan:", aiError.message);
+        if (error) {
+            console.error("❌ Gagal Direct Save:", error.message);
+            return NextResponse.json({ error: error.message }, { status: 500 });
         }
-    } else {
-        console.log("⚠️ [History AI] Tidak ada kecocokan dataset. Skip.");
-    }
-    
-    console.log("🚀 [API POST HISTORY] Selesai =================================\n");
 
-    return NextResponse.json({ success: true });
+        console.log("✅ Berhasil Direct Save.");
+        return NextResponse.json({ success: true });
+    }
+
+
+    // ========================================================================
+    // SKENARIO B: LOCAL LOOKUP (Dari Halaman Detail Resep Aplikasi)
+    // Frontend hanya mengirimkan 'recipeId'. Backend cari di tabel 'resep'.
+    // ========================================================================
+    if (body.recipeId) {
+        console.log(`🔍 [JALUR 2: LOCAL LOOKUP] Mencari ID ${body.recipeId} di tabel 'resep'...`);
+
+        // 1. Ambil data dari tabel 'resep'
+        const { data: appRecipe } = await supabaseAdmin
+            .from("resep")
+            .select("*")
+            .eq("id", body.recipeId)
+            .single();
+
+        if (!appRecipe) {
+            console.warn("⚠️ ID Resep tidak ditemukan di database lokal.");
+            return NextResponse.json({ message: "Recipe not found" });
+        }
+
+        console.log(`   Ditemukan: "${appRecipe.title}"`);
+
+        // 2. Konversi Array ke String (Snapshot)
+        // Tabel resep pakai JSONB/Array, history_ai pakai Text
+        let bahanStr = "";
+        if (Array.isArray(appRecipe.ingredients)) {
+            bahanStr = appRecipe.ingredients.join(', ');
+        } else if (typeof appRecipe.ingredients === 'string') {
+            bahanStr = appRecipe.ingredients;
+        }
+
+        let stepsStr = "";
+        if (Array.isArray(appRecipe.steps)) {
+            stepsStr = appRecipe.steps.join('\n');
+        } else if (typeof appRecipe.steps === 'string') {
+            stepsStr = appRecipe.steps;
+        }
+
+        // 3. Simpan ke history_ai
+        const { error: aiError } = await supabaseAdmin
+            .from("history_ai")
+            .insert({
+                user_id: userData.id,
+                dataset_resep_id: appRecipe.id, // Gunakan ID resep lokal
+                title: appRecipe.title,
+                access_time_history: new Date().toISOString(),
+                // Data Snapshot
+                image_url: appRecipe.image_url,
+                bahan: bahanStr,
+                cara_memasak: stepsStr
+            });
+
+        if (aiError) {
+            console.error("❌ Gagal simpan snapshot lokal:", aiError.message);
+            return NextResponse.json({ error: aiError.message }, { status: 500 });
+        }
+
+        // (Opsional) Simpan ke tabel 'history' lama untuk statistik view count resep
+        await supabaseAdmin.from("history").insert({
+            id_user: userData.id,
+            id_recipe: Number(body.recipeId),
+            created_at: new Date().toISOString()
+        });
+
+        console.log("✅ Berhasil simpan Snapshot Lokal.");
+        return NextResponse.json({ success: true });
+    }
+
+    return NextResponse.json({ error: "Invalid Request Body" }, { status: 400 });
 
   } catch (err: any) {
-    console.error("🔥 [API CRASH] Error:", err);
+    console.error("🔥 Error:", err);
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
