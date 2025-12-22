@@ -231,10 +231,6 @@ const RecommendedSection = ({ searchData }: Props) => {
                   </div>
 
                   <div className="flex items-center justify-between pt-3 border-t border-gray-100">
-                    <div className="flex items-center gap-1">
-                      <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                      <span className="text-sm font-semibold text-gray-900">4.8</span>
-                    </div>
                     <div className="flex items-center gap-2">
                       <ChefHat className="w-4 h-4 text-gray-400" />
                       <span className="text-xs text-gray-600">{recipe.user_id ?? "Anon"}</span>

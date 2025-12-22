@@ -1,7 +1,7 @@
 'use client';
 
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Home, BookOpen, Heart, User, Settings, LogOut } from 'lucide-react';
+import { X, Home, BookOpen, Heart, User, History, LogOut } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useSession, signOut } from 'next-auth/react';
@@ -20,6 +20,7 @@ const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
     { icon: Home, label: 'Beranda', href: '/', requireAuth: false },
     { icon: BookOpen, label: 'Resep Saya', href: '/my-recipes', requireAuth: true },
     { icon: Heart, label: 'Favorit', href: '/favorites', requireAuth: true },
+    { icon: History, label: 'Riwayat', href: '/history', requireAuth: true },
     { icon: User, label: 'Profil', href: '/profile', requireAuth: true }
   ];
 

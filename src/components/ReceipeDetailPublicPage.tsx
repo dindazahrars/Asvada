@@ -2,11 +2,13 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { Clock, Users, ChefHat, ArrowLeft, Share2, Bookmark, Heart, Star, Utensils, Timer } from 'lucide-react';
+import { Clock, Users, ChefHat, ArrowLeft, Share2, Bookmark, Heart, Star, Utensils, Timer, X } from 'lucide-react';
 import Image from 'next/image';
 import { createSupabaseBrowser } from '@/lib/supabase_client';
 import { motion } from 'framer-motion';
+import { useSession } from 'next-auth/react';
 
+// --- Interfaces ---
 interface Recipe {
   id: number;
   user_id: string;
@@ -22,6 +24,9 @@ interface Recipe {
   steps: string[];
   status: 'draft' | 'published';
   created_at: string;
+  // Field optional untuk data dari search/model yang mungkin beda format
+  Title?: string;
+  Loves?: number;
 }
 
 interface UserInfo {
@@ -29,59 +34,105 @@ interface UserInfo {
   email: string;
 }
 
-export default function RecipeDetailPublicPage() {
+interface Props {
+  recipe?: any;
+  onClose?: () => void; // Untuk mode Modal
+  open?: boolean;
+}
+
+export default function RecipeDetailPublicPage({ recipe: propRecipe, onClose }: Props) {
   const router = useRouter();
   const params = useParams();
+  const { data: session, status } = useSession();
+  
   const [recipe, setRecipe] = useState<Recipe | null>(null);
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [isBookmarked, setIsBookmarked] = useState(false);
   const [isLiked, setIsLiked] = useState(false);
+  
   const supabase = createSupabaseBrowser();
+  const isModal = !!propRecipe; // Deteksi apakah sedang dalam mode Modal
 
+  // 1. SETUP DATA (Handle Mode Modal vs Halaman URL)
   useEffect(() => {
-    if (params.id) {
-      loadRecipe();
+    const initData = async () => {
+      setLoading(true);
+
+      if (propRecipe) {
+        // A. MODE MODAL
+        const normalizedRecipe: any = {
+          ...propRecipe,
+          title: propRecipe.title || propRecipe.Title,
+          prep_time: propRecipe.prep_time || 15,
+          cook_time: propRecipe.cook_time || 30,
+          servings: propRecipe.servings || 2,
+          ingredients: propRecipe.ingredients || ['Bahan tidak tersedia'],
+          steps: propRecipe.steps || ['Langkah tidak tersedia'],
+          created_at: propRecipe.created_at || new Date().toISOString()
+        };
+        setRecipe(normalizedRecipe);
+        if (normalizedRecipe.user_id) fetchUserInfo(normalizedRecipe.user_id);
+        setLoading(false);
+
+      } else if (params.id) {
+        // B. MODE HALAMAN
+        await loadRecipeFromDb(params.id as string);
+      }
+    };
+
+    initData();
+  }, [params.id, propRecipe]);
+
+  // 2. TRIGGER HISTORY (Saat resep & session siap)
+  useEffect(() => {
+    if (recipe?.id && status === 'authenticated') {
+      addToHistory(recipe.id);
     }
-  }, [params.id]);
+  }, [recipe, status]);
 
-  const loadRecipe = async () => {
-    setLoading(true);
+  const fetchUserInfo = async (userId: string) => {
+    const { data } = await supabase.from('users').select('name, email').eq('id', userId).single();
+    if (data) setUserInfo(data);
+  };
 
+  const loadRecipeFromDb = async (id: string) => {
     try {
-      const { data: recipeData, error: recipeError } = await supabase
-        .from('resep')
-        .select('*')
-        .eq('id', params.id)
-        .single();
-
-      if (recipeError || !recipeData) {
-        alert('❌ Resep tidak ditemukan!');
-        router.push('/');
-        return;
-      }
-
-      setRecipe(recipeData);
-
-      if (recipeData.user_id) {
-        const { data: userData } = await supabase
-          .from('users')
-          .select('name, email')
-          .eq('id', recipeData.user_id)
-          .single();
-
-        if (userData) {
-          setUserInfo(userData);
-        }
-      }
+      const { data, error } = await supabase.from('resep').select('*').eq('id', id).single();
+      if (error || !data) throw new Error('Not found');
+      setRecipe(data);
+      if (data.user_id) fetchUserInfo(data.user_id);
     } catch (error) {
-      console.error('Error:', error);
-      alert('❌ Terjadi kesalahan saat memuat resep!');
+      console.error('Error load recipe:', error);
+      alert('❌ Resep tidak ditemukan!');
       router.push('/');
     } finally {
       setLoading(false);
     }
   };
+
+     const addToHistory = async (recipeId: number) => {
+      if (!session?.user) return;
+
+      try {
+        const res = await fetch('/api/history', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ recipeId })
+        });
+
+        // BACA RESPON
+        const data = await res.json().catch(() => null); // Cegah error parse JSON
+
+        if (!res.ok) {
+          console.error("⚠️ Error API:", data || "Server Error (No JSON)");
+        } else {
+          console.log("✅ History tersimpan (Server Response):", data);
+        }
+      } catch (error) {
+        console.error('🔥 Fetch Error:', error);
+      }
+    };
 
   const handleShare = () => {
     const url = window.location.href;
@@ -101,7 +152,8 @@ export default function RecipeDetailPublicPage() {
   };
 
   const getDifficultyColor = (difficulty: string) => {
-    switch (difficulty) {
+    const d = difficulty?.toLowerCase();
+    switch (d) {
       case 'easy': return 'bg-emerald-500';
       case 'medium': return 'bg-amber-500';
       case 'hard': return 'bg-rose-500';
@@ -110,7 +162,8 @@ export default function RecipeDetailPublicPage() {
   };
 
   const getDifficultyText = (difficulty: string) => {
-    switch (difficulty) {
+    const d = difficulty?.toLowerCase();
+    switch (d) {
       case 'easy': return 'Mudah';
       case 'medium': return 'Sedang';
       case 'hard': return 'Sulit';
@@ -120,7 +173,7 @@ export default function RecipeDetailPublicPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-orange-50 via-amber-50 to-red-50 flex items-center justify-center">
+      <div className={`flex items-center justify-center bg-white ${isModal ? 'h-96' : 'min-h-screen'}`}>
         <div className="text-center">
           <motion.div
             animate={{ rotate: 360 }}
@@ -133,26 +186,12 @@ export default function RecipeDetailPublicPage() {
     );
   }
 
-  if (!recipe) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-orange-50 via-amber-50 to-red-50 flex items-center justify-center">
-        <div className="text-center">
-          <ChefHat className="w-24 h-24 text-gray-300 mx-auto mb-4" />
-          <p className="text-xl text-gray-600 font-semibold mb-4">Resep tidak ditemukan</p>
-          <button
-            onClick={() => router.push('/')}
-            className="px-6 py-3 bg-gradient-to-r from-[#FE9412] to-[#902E2B] text-white rounded-xl hover:shadow-lg transition font-medium"
-          >
-            Kembali ke Beranda
-          </button>
-        </div>
-      </div>
-    );
-  }
+  if (!recipe) return null;
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-50 via-amber-50 to-red-50">
-      {/* Hero Section with Image */}
+  // --- Render Konten Utama ---
+  const Content = (
+    <div className={`bg-gradient-to-br from-orange-50 via-amber-50 to-red-50 ${isModal ? 'min-h-full pb-10' : 'min-h-screen'}`}>
+      {/* Hero Section */}
       <div className="relative h-[60vh] min-h-[500px]">
         {recipe.image_url ? (
           <Image
@@ -167,20 +206,18 @@ export default function RecipeDetailPublicPage() {
             <ChefHat className="w-32 h-32 text-white/50" />
           </div>
         )}
-        
-        {/* Gradient Overlay */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
         
-        {/* Back Button */}
+        {/* Tombol Back / Close */}
         <button
-          onClick={() => router.back()}
-          className="absolute top-6 left-6 p-3 bg-white/90 backdrop-blur-sm rounded-full shadow-lg hover:bg-white transition z-10"
+          onClick={() => isModal ? onClose?.() : router.back()}
+          className="absolute top-6 left-6 p-3 bg-white/90 backdrop-blur-sm rounded-full shadow-lg hover:bg-white transition z-20"
         >
-          <ArrowLeft className="w-5 h-5 text-gray-900" />
+           {isModal ? <X className="w-5 h-5 text-gray-900" /> : <ArrowLeft className="w-5 h-5 text-gray-900" />}
         </button>
 
         {/* Action Buttons */}
-        <div className="absolute top-6 right-6 flex gap-3 z-10">
+        <div className="absolute top-6 right-6 flex gap-3 z-20">
           <button
             onClick={() => setIsLiked(!isLiked)}
             className={`p-3 backdrop-blur-sm rounded-full shadow-lg transition ${
@@ -197,16 +234,13 @@ export default function RecipeDetailPublicPage() {
           >
             <Bookmark className={`w-5 h-5 ${isBookmarked ? 'fill-current' : ''}`} />
           </button>
-          <button
-            onClick={handleShare}
-            className="p-3 bg-white/90 backdrop-blur-sm rounded-full shadow-lg hover:bg-white transition"
-          >
+          <button onClick={handleShare} className="p-3 bg-white/90 backdrop-blur-sm rounded-full shadow-lg hover:bg-white transition">
             <Share2 className="w-5 h-5 text-gray-900" />
           </button>
         </div>
 
-        {/* Title & Info Overlay */}
-        <div className="absolute bottom-0 left-0 right-0 p-8 text-white">
+        {/* Title Info */}
+        <div className="absolute bottom-0 left-0 right-0 p-8 text-white z-10">
           <div className="max-w-6xl mx-auto">
             <div className="flex flex-wrap items-center gap-3 mb-4">
               <span className={`px-4 py-2 ${getDifficultyColor(recipe.difficulty)} text-white rounded-full text-sm font-bold shadow-lg`}>
@@ -217,16 +251,10 @@ export default function RecipeDetailPublicPage() {
                   {recipe.category}
                 </span>
               )}
-              <div className="flex items-center gap-2 px-4 py-2 bg-white/20 backdrop-blur-md rounded-full">
-                <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                <span className="text-sm font-bold">4.8</span>
-                <span className="text-sm text-white/80">(128 reviews)</span>
-              </div>
             </div>
-            <h1 className="text-5xl font-bold mb-3 drop-shadow-lg">{recipe.title}</h1>
-            <p className="text-xl text-white/90 mb-6 max-w-3xl">{recipe.description}</p>
+            <h1 className="text-4xl md:text-5xl font-bold mb-3 drop-shadow-lg">{recipe.title}</h1>
+            <p className="text-lg md:text-xl text-white/90 mb-6 max-w-3xl">{recipe.description}</p>
             
-            {/* Quick Stats */}
             <div className="flex flex-wrap gap-6">
               <div className="flex items-center gap-3">
                 <div className="p-3 bg-white/20 backdrop-blur-md rounded-xl">
@@ -263,7 +291,7 @@ export default function RecipeDetailPublicPage() {
       {/* Content Section */}
       <div className="max-w-6xl mx-auto px-4 py-12">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Ingredients Sidebar */}
+          {/* Ingredients */}
           <div className="lg:col-span-1">
             <motion.div
               initial={{ opacity: 0, x: -20 }}
@@ -294,7 +322,6 @@ export default function RecipeDetailPublicPage() {
                 ))}
               </div>
 
-              {/* Author Info */}
               {userInfo && (
                 <div className="mt-8 pt-8 border-t-2 border-orange-100">
                   <p className="text-sm font-semibold text-gray-500 mb-3">DIBUAT OLEH</p>
@@ -318,7 +345,7 @@ export default function RecipeDetailPublicPage() {
             </motion.div>
           </div>
 
-          {/* Steps Main Content */}
+          {/* Steps */}
           <div className="lg:col-span-2">
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -381,4 +408,16 @@ export default function RecipeDetailPublicPage() {
       </div>
     </div>
   );
+
+  if (isModal) {
+    return (
+      <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+        <div className="min-h-full w-full bg-white md:rounded-t-3xl md:mt-20 overflow-hidden relative">
+            {Content}
+        </div>
+      </div>
+    );
+  }
+
+  return Content;
 }
