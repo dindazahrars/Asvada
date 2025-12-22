@@ -38,12 +38,59 @@ export default function RecipeDetailPage() {
   const [loading, setLoading] = useState(true);
   const [isOwner, setIsOwner] = useState(false);
   const supabase = createSupabaseBrowser();
+      const addToHistory = async (recipeId: number) => {
+      if (!session?.user) return;
+
+      try {
+        const res = await fetch('/api/history', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ recipeId })
+        });
+
+        // BACA RESPON
+        const data = await res.json().catch(() => null); // Cegah error parse JSON
+
+        if (!res.ok) {
+          console.error("⚠️ Error API:", data || "Server Error (No JSON)");
+        } else {
+          console.log("✅ History tersimpan (Server Response):", data);
+        }
+      } catch (error) {
+        console.error('🔥 Fetch Error:', error);
+      }
+    };
 
   useEffect(() => {
     if (params.id) {
       loadRecipe();
     }
   }, [params.id, session]);
+
+    useEffect(() => {
+    if (params.id && session?.user?.email) {
+      
+      // Panggil API History secara background (fire and forget)
+      fetch('/api/history', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ recipeId: params.id }),
+      })
+      .then(res => res.json())
+      .then(data => console.log("History recorded:", data))
+      .catch(err => console.error("Failed to record history:", err));
+
+    }
+  }, [params.id, session]);
+    useEffect(() => {
+    if (recipe?.id && status === 'authenticated') {
+      addToHistory(recipe.id);
+    }
+  }, [recipe, status]);
+
+
 
   const loadRecipe = async () => {
     setLoading(true);
@@ -81,6 +128,8 @@ export default function RecipeDetailPage() {
       if (!userError && userData) {
         setUserInfo(userData);
       }
+
+      
 
       // Check if current user is the owner
       if (session?.user?.email) {
