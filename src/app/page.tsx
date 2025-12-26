@@ -10,8 +10,8 @@ import RecommendedSection from '@/components/RecommendedSection';
 import Footer from '@/components/Footer';
 import { LogOut, User, Menu } from 'lucide-react';
 import Image from 'next/image';
-// import { createSupabaseBrowser } from '@/lib/supabase_client'; // Tidak dipakai karena via API
 
+// Tipe data resep disesuaikan dengan output API
 interface Recipe {
   id: number;
   title: string;
@@ -22,9 +22,6 @@ interface Recipe {
   servings: number;
   user_id: string | null;
   category?: string;
-  // Tambahan property jika dari AI
-  ingredients?: string[];
-  steps?: string[];
 }
 
 interface SearchData {
@@ -36,9 +33,10 @@ export default function Home() {
   const [searchCount, setSearchCount] = useState(0);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(false); // Loading state
-
+  
+  // State untuk data hasil pencarian & loading
   const [searchData, setSearchData] = useState<SearchData>({ data: [] });
+  const [isLoading, setIsLoading] = useState(false);
   
   const MAX_FREE_SEARCHES = 3;
   const isLoggedIn = status === 'authenticated';
@@ -60,11 +58,11 @@ export default function Home() {
     }
   }, [searchCount, isLoggedIn]);
 
-  // --- 2. Handle Search via API Routes (Model Direct/Undirect) ---
+  // --- 2. Handle Search via API (Model Direct/Undirect) ---
   const handleSearch = async (query: string, filters?: Record<string, string[]>) => {
     console.log('🔎 Search Triggered:', { query, filters });
 
-    // A. Cek Limit Guest
+    // A. Cek Limit untuk Guest
     if (!isLoggedIn) {
       if (searchCount >= MAX_FREE_SEARCHES) {
         setShowLoginModal(true);
@@ -80,52 +78,58 @@ export default function Home() {
       let payload = {};
 
       // LOGIKA PEMILIHAN ROUTE:
-      // Jika ada teks input -> Gunakan 'modelUndirect' (Biasanya untuk AI/Fuzzy Search)
-      // Jika hanya filter -> Gunakan 'modelDirect' (Biasanya untuk Strict Filter)
+      // Skenario 1: User mengetik teks -> Pakai modelUndirect (Pencarian Cerdas/AI)
       if (query && query.trim() !== '') {
         endpoint = '/api/modelUndirect';
         payload = { 
-          prompt: query,   // Kirim sebagai prompt/query
-          filters: filters // Sertakan filter jika ada
+          prompt: query,   // Kirim teks sebagai 'prompt'
+          filters: filters // Sertakan filter sebagai konteks tambahan
         };
-      } else {
+      } 
+      // Skenario 2: User hanya klik Filter -> Pakai modelDirect (Pencarian Spesifik)
+      else {
         endpoint = '/api/modelDirect';
         payload = { 
-          filters: filters // Kirim object filter
+          filters: filters // Kirim object filter saja
         };
       }
 
-      console.log(`🚀 Fetching to ${endpoint}...`, payload);
+      console.log(`🚀 Fetching ke: ${endpoint}`, payload);
 
       const res = await fetch(endpoint, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
 
       if (!res.ok) {
-        throw new Error(`API Error: ${res.statusText}`);
+        throw new Error(`Gagal mengambil data dari ${endpoint}`);
       }
 
       const result = await res.json();
-      console.log("✅ Data received:", result);
+      console.log("✅ Data diterima:", result);
 
-      // Handle variasi struktur response (sesuaikan dengan return API kamu)
-      // Kadang API return { data: [...] } atau langsung array [...]
-      const recipes = Array.isArray(result) ? result : (result.data || []);
-      
+      // Handle variasi format response dari API (jaga-jaga)
+      // Kadang API return array langsung, kadang dalam object { data: ... }
+      let recipes: Recipe[] = [];
+      if (Array.isArray(result)) {
+        recipes = result;
+      } else if (result.data && Array.isArray(result.data)) {
+        recipes = result.data;
+      } else if (result.recipes && Array.isArray(result.recipes)) {
+        recipes = result.recipes;
+      }
+
       setSearchData({ data: recipes });
 
-      // Trigger modal limit jika pas di batas
+      // Jika guest pas mencapai limit setelah search ini
       if (!isLoggedIn && searchCount + 1 >= MAX_FREE_SEARCHES) {
          setTimeout(() => setShowLoginModal(true), 1500);
       }
 
     } catch (err) {
       console.error("🔥 Error searching:", err);
-      // Opsional: Tampilkan toast error ke user
+      // Opsional: Bisa tambahkan toast notifikasi error di sini
     } finally {
       setIsLoading(false);
     }
@@ -188,7 +192,6 @@ export default function Home() {
         )}
 
         {/* HERO SECTION */}
-        {/* onSearch sekarang memanggil handleSearch yang nge-fetch ke API modelDirect/Undirect */}
         <HeroSection 
           onSearch={handleSearch} 
           setSearchData={setSearchData}
@@ -197,15 +200,15 @@ export default function Home() {
           isLoggedIn={isLoggedIn}
         />
 
-        {/* LOADING INDICATOR (Optional) */}
+        {/* Loading Indicator */}
         {isLoading && (
           <div className="text-center py-8">
             <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-orange-600"></div>
-            <p className="text-gray-500 mt-2">Sedang mencari resep terbaik...</p>
+            <p className="text-gray-500 mt-2 text-sm">Sedang memproses pencarian...</p>
           </div>
         )}
 
-        {/* RECOMMENDED / RESULTS */}
+        {/* RESULTS SECTION */}
         <RecommendedSection searchData={searchData} />
       </main>
 
