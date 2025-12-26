@@ -103,8 +103,7 @@ export default function RecipeDetailPublicPage({ recipe: propRecipe, onClose }: 
 
   // 2. TRIGGER HISTORY
   useEffect(() => {
-    // Hanya catat history jika user login DAN resep bukan dataset (atau sesuaikan logic backend jika support dataset ID)
-    if (recipe?.id && status === 'authenticated' && !recipe.is_dataset) {
+      if (recipe?.id && status === 'authenticated' && !recipe.is_dataset) {
       addToHistory(recipe.id);
     }
   }, [recipe, status]);
@@ -117,7 +116,6 @@ export default function RecipeDetailPublicPage({ recipe: propRecipe, onClose }: 
   // --- LOGIKA UTAMA PERBAIKAN FETCH DB ---
   const loadRecipeFromDb = async (id: string) => {
     try {
-      // 1. Coba Cari di Tabel 'resep' (User Upload)
       const { data: appData, error: appError } = await supabase
         .from('resep')
         .select('*')
@@ -128,8 +126,7 @@ export default function RecipeDetailPublicPage({ recipe: propRecipe, onClose }: 
         setRecipe({ ...appData, is_dataset: false });
         if (appData.user_id) fetchUserInfo(appData.user_id);
       } else {
-        // 2. Jika Gagal, Coba Cari di Tabel 'dataset' (AI)
-        console.log("Mencari di dataset...");
+              console.log("Mencari di dataset...");
         const { data: dsData, error: dsError } = await supabase
           .from('dataset')
           .select('*')
@@ -150,12 +147,11 @@ export default function RecipeDetailPublicPage({ recipe: propRecipe, onClose }: 
           difficulty: 'Medium',
           category: 'Dataset AI',
           
-          // Parsing string ke array
           ingredients: dsData.ingredients_cleaned ? dsData.ingredients_cleaned.split(',') : [],
           steps: dsData.steps ? dsData.steps.split('\n') : ['Lihat detail pada sumber asli.'],
           
           created_at: new Date().toISOString(),
-          is_dataset: true, // Penanda penting
+          is_dataset: true,
           user_id: null
         };
 
@@ -236,7 +232,6 @@ const addToHistory = async (recipeId: number) => {
 
   if (!recipe) return null;
 
-  // --- CONTENT RENDER ---
   const Content = (
     <div className={`bg-gradient-to-br from-orange-50 via-amber-50 to-red-50 ${isModal ? 'min-h-full pb-10' : 'min-h-screen'}`}>
       {/* Hero Section */}
@@ -244,10 +239,11 @@ const addToHistory = async (recipeId: number) => {
         <Image
           src={recipe.image_url || '/logo.png'}
           alt={recipe.title}
+          unoptimized
           fill
           className="object-cover"
           priority
-          unoptimized={recipe.is_dataset} // Optimize false untuk gambar eksternal dataset
+          unoptimized={recipe.is_dataset}
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
         
@@ -387,7 +383,7 @@ const addToHistory = async (recipeId: number) => {
     </div>
   );
 
-  // Jika mode modal, wrap dengan overlay
+
   if (isModal) {
     return (
       <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
