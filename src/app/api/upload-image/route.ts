@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { writeFile, mkdir } from 'fs/promises';
-import path from 'path';
-import { existsSync } from 'fs';
+import { createClient } from '@supabase/supabase-js';
+
+// Pastikan kamu punya ENV ini di Vercel
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!; // Pakai Service Role agar bisa upload tanpa login user
 
 export async function POST(request: NextRequest) {
   try {
@@ -9,63 +11,55 @@ export async function POST(request: NextRequest) {
     const file = formData.get('file') as File;
 
     if (!file) {
-      return NextResponse.json(
-        { error: 'No file uploaded' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'No file uploaded' }, { status: 400 });
     }
 
-    // Validasi tipe file
+    // 1. Validasi Tipe & Ukuran
     const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
     if (!allowedTypes.includes(file.type)) {
-      return NextResponse.json(
-        { error: 'Invalid file type. Only JPG, PNG, and WEBP are allowed.' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Invalid file type' }, { status: 400 });
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      return NextResponse.json({ error: 'File size > 5MB' }, { status: 400 });
     }
 
-    // Validasi ukuran file (max 5MB)
-    const maxSize = 5 * 1024 * 1024; // 5MB
-    if (file.size > maxSize) {
-      return NextResponse.json(
-        { error: 'File size exceeds 5MB limit.' },
-        { status: 400 }
-      );
-    }
+    // 2. Setup Supabase Admin
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Convert file to buffer
+    // 3. Convert ke Buffer
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
-    // Generate unique filename
+    // 4. Buat Nama Unik
     const timestamp = Date.now();
-    const originalName = file.name.replace(/\s+/g, '-');
-    const filename = `${timestamp}-${originalName}`;
+    const cleanName = file.name.replace(/[^a-zA-Z0-9.]/g, '-');
+    const fileName = `${timestamp}-${cleanName}`;
 
-    // Create uploads directory if it doesn't exist
-    const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'recipes');
-    
-    if (!existsSync(uploadDir)) {
-      await mkdir(uploadDir, { recursive: true });
-    }
+    // 5. Upload ke Supabase Storage (Bucket 'recipes')
+    const { data, error } = await supabase.storage
+      .from('recipes') // Pastikan nama bucket di Supabase adalah 'recipes'
+      .upload(fileName, buffer, {
+        contentType: file.type,
+        upsert: false
+      });
 
-    // Save file
-    const filepath = path.join(uploadDir, filename);
-    await writeFile(filepath, buffer);
+    if (error) throw error;
 
-    // Return public URL
-    const url = `/uploads/recipes/${filename}`;
+    // 6. Dapatkan Public URL
+    const { data: { publicUrl } } = supabase.storage
+      .from('recipes')
+      .getPublicUrl(fileName);
 
     return NextResponse.json({ 
       success: true,
-      url,
-      filename 
+      url: publicUrl, // URL ini yang akan disimpan ke database
+      filename: fileName 
     });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Upload error:', error);
     return NextResponse.json(
-      { error: 'Failed to upload file' },
+      { error: error.message || 'Failed to upload' },
       { status: 500 }
     );
   }
