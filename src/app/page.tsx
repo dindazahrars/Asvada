@@ -60,7 +60,7 @@ export default function Home() {
     }
   }, [searchCount, isLoggedIn]);
 
-  // --- 2. Handle Search via API Routes (FIXED) ---
+  // --- 2. Handle Search via API Routes (FIXED PAYLOAD) ---
   const handleSearch = async (query: string, filters?: Record<string, string[]>) => {
     console.log('🔎 Search Triggered:', { query, filters });
 
@@ -79,19 +79,20 @@ export default function Home() {
       let endpoint = '';
       let payload = {};
 
-      // LOGIKA PEMILIHAN ROUTE:
-      // Jika ada text input -> Pakai modelUndirect (Pencarian AI/Fuzzy)
-      // Jika hanya filter -> Pakai modelDirect (Filter Strict)
+      // LOGIKA PEMILIHAN ROUTE & PAYLOAD
+      // PENTING: Struktur body harus { data: ... } karena di route.js dibaca sebagai req.body.data
+
       if (query && query.trim() !== '') {
+        // --- SKENARIO 1: Pencarian Teks (Undirect) ---
         endpoint = '/api/modelUndirect';
         payload = { 
-          prompt: query,   // Parameter untuk AI/Search
-          filters: filters // Sertakan filter sebagai konteks
+          data: query // <-- Backend 'modelUndirect' mengharapkan string query ada di properti 'data'
         };
       } else {
+        // --- SKENARIO 2: Filter (Direct) ---
         endpoint = '/api/modelDirect';
         payload = { 
-          filters: filters // Kirim object filter
+          data: filters // <-- Backend 'modelDirect' mengharapkan object filter ada di properti 'data'
         };
       }
 
@@ -110,9 +111,13 @@ export default function Home() {
       const result = await res.json();
       console.log("✅ Data diterima:", result);
 
-      // Handle variasi response (kadang API return array langsung, kadang object {data: ...})
-      const recipes = Array.isArray(result) ? result : (result.data || []);
-      setSearchData({ data: recipes });
+      // Handle variasi response
+      // Backend kamu me-return { status: 'ok', data: [...] }
+      // Jadi kita ambil result.data
+      const recipes = result.data || []; 
+      
+      // Pastikan selalu array
+      setSearchData({ data: Array.isArray(recipes) ? recipes : [] });
 
       // Trigger modal limit jika pas di batas
       if (!isLoggedIn && searchCount + 1 >= MAX_FREE_SEARCHES) {
