@@ -134,42 +134,58 @@ const RecommendedSection = ({ searchData }: Props) => {
               key={recipe.id}
               whileHover={{ y: -8 }}
               onClick={() => handleRecipeClick(recipe.id)}
-              className="bg-white rounded-2xl shadow-md overflow-hidden border hover:shadow-xl cursor-pointer"
+              className="bg-white rounded-2xl shadow-md overflow-hidden border border-gray-100 hover:shadow-xl transition-all cursor-pointer group"
             >
-              <div className="relative h-48">
+              <div className="relative h-48 overflow-hidden">
                 <Image
                   src={recipe.image_url}
                   alt={recipe.title}
                   fill
-                  unoptimized   // 🔥 FIX UTAMA
-                  className="object-cover transition-transform duration-300 hover:scale-110"
+                  unoptimized
+                  className="object-cover group-hover:scale-110 transition-transform duration-300"
                 />
 
                 <button
                   onClick={(e) => toggleFavorite(e, recipe.id)}
-                  className={`absolute top-3 right-3 p-2 rounded-full shadow-md ${
-                    isFavorited ? 'bg-red-600 text-white' : 'bg-white text-gray-600'
+                  className={`absolute top-3 right-3 p-2 rounded-full shadow-md transition-all ${
+                    isFavorited ? 'bg-[#902E2B] text-white' : 'bg-white text-gray-600 hover:bg-[#902E2B] hover:text-white'
                   }`}
                 >
                   <Bookmark className={`w-4 h-4 ${isFavorited ? 'fill-current' : ''}`} />
                 </button>
+
+                <div className="absolute bottom-3 left-3">
+                  <span className="px-3 py-1 bg-[#FE9412] text-white text-xs font-semibold rounded-full">
+                    {recipe.difficulty}
+                  </span>
+                </div>
               </div>
 
               <div className="p-4">
-                <h3 className="font-bold text-lg mb-2">{recipe.title}</h3>
-                <p className="text-sm text-gray-600 mb-4 line-clamp-2">{recipe.description}</p>
+                <h3 className="font-bold text-lg text-gray-900 mb-2 line-clamp-1 group-hover:text-[#FE9412] transition-colors">
+                  {recipe.title}
+                </h3>
 
-                <div className="flex justify-between text-xs text-gray-500">
+                <p className="text-sm text-gray-600 mb-4 line-clamp-2">
+                  {recipe.description}
+                </p>
+
+                <div className="flex items-center justify-between text-xs text-gray-500 mb-3">
                   <div className="flex items-center gap-1">
-                    <Clock className="w-4 h-4" /> {recipe.cook_time} menit
+                    <Clock className="w-4 h-4" />
+                    <span>{recipe.cook_time} menit</span>
                   </div>
                   <div className="flex items-center gap-1">
-                    <Users className="w-4 h-4" /> {recipe.servings || 1} porsi
+                    <Users className="w-4 h-4" />
+                    <span>{recipe.servings || 1} porsi</span>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 mt-3 text-xs text-gray-600">
-                  <ChefHat className="w-4 h-4" /> {recipe.user_id ?? 'Anon'}
+                <div className="flex items-center justify-between pt-3 border-t border-gray-100">
+                  <div className="flex items-center gap-2">
+                    <ChefHat className="w-4 h-4 text-gray-400" />
+                    <span className="text-xs text-gray-600">{recipe.user_id ?? 'Anon'}</span>
+                  </div>
                 </div>
               </div>
             </motion.article>
