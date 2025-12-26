@@ -77,12 +77,6 @@ const LoginModal = ({ isOpen, onClose, searchCount, maxSearches }: LoginModalPro
           </button>
 
           {/* Register Link */}
-          <p className="text-center text-sm text-gray-600 mt-4">
-            Belum punya akun?{' '}
-            <button className="text-orange-600 font-semibold hover:underline">
-              Daftar di sini
-            </button>
-          </p>
         </motion.div>
       </motion.div>
     </AnimatePresence>
