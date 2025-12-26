@@ -239,11 +239,10 @@ const addToHistory = async (recipeId: number) => {
         <Image
           src={recipe.image_url || '/logo.png'}
           alt={recipe.title}
-          unoptimized
+          unoptimized={true} // FIX: Pastikan ini selalu true agar gambar eksternal/dataset tetap muncul
           fill
           className="object-cover"
           priority
-          unoptimized={recipe.is_dataset}
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
         
