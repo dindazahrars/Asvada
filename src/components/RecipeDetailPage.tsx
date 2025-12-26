@@ -264,6 +264,7 @@ export default function RecipeDetailPage() {
               fill
               className="object-cover"
               priority
+              unoptimized={true} // FIX: Tambahkan ini agar gambar selalu muncul
             />
           ) : (
             <div className="flex items-center justify-center h-full bg-gradient-to-br from-orange-200 to-red-200">
