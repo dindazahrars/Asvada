@@ -229,6 +229,7 @@ export default function MyRecipesPage() {
                       alt={recipe.title}
                       fill
                       className="object-cover group-hover:scale-110 transition duration-300"
+                      unoptimized={true} // FIX: Agar gambar selalu muncul
                     />
                   ) : (
                     <div className="flex items-center justify-center h-full">
