@@ -1,11 +1,6 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  turbopack: {
-    root: process.cwd(),
-  },
-
-  // ⬇⬇ TAMBAHKAN INI BIAR BUILD VERCEL GAK ERROR
   eslint: {
     ignoreDuringBuilds: true,
   },
@@ -24,9 +19,19 @@ const nextConfig: NextConfig = {
         port: "",
         pathname: "/**",
       },
+
+      // ⬇️ domain gambar Nusantara
       {
         protocol: "https",
-        hostname: "**",
+        hostname: "img-global.cpcdn.com",
+      },
+      {
+        protocol: "https",
+        hostname: "akcdn.detik.net.id",
+      },
+      {
+        protocol: "https",
+        hostname: "images.pexels.com",
       },
     ],
   },
