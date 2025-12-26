@@ -6,7 +6,7 @@ import { useSession } from 'next-auth/react';
 import { motion } from 'framer-motion';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { Trash2, Clock, Users, ChefHat, Heart } from 'lucide-react';
+import { Trash2, Clock, Users, ChefHat, Heart, RefreshCw } from 'lucide-react';
 
 interface Recipe {
   id: number;
@@ -37,8 +37,9 @@ export default function FavoritePage() {
   }, [session, status]);
 
   const loadFavorites = async () => {
+    setLoading(true);
     try {
-      // Get user ID
+      // 1. Ambil ID User
       const { data: userData } = await supabase
         .from('users')
         .select('id')
@@ -47,31 +48,27 @@ export default function FavoritePage() {
 
       if (!userData) return;
 
-      // Get favorites with recipe details
+      // 2. Ambil data Favorit dengan Join ke tabel Resep
+      // MENGGUNAKAN resep (*) agar lebih aman mendeteksi relasi
       const { data, error } = await supabase
         .from('favorite')
         .select(`
           id_recipe,
-          resep:id_recipe (
-            id,
-            title,
-            image_url,
-            cook_time,
-            servings,
-            difficulty,
-            description
-          )
+          resep (*) 
         `)
         .eq('id_user', userData.id);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching favorites:', error);
+        throw error;
+      }
 
-      // Transform data
-      const recipes = data
-        .map((item: any) => item.resep)
-        .filter((r: any) => r !== null);
+      // 3. Mapping data & Filter yang valid saja
+      const validRecipes = data
+        .map((item: any) => item.resep) // Ambil object resepnya
+        .filter((r: any) => r !== null && r !== undefined); // Pastikan resepnya ada (tidak null)
 
-      setFavorites(recipes);
+      setFavorites(validRecipes);
     } catch (error) {
       console.error('Error loading favorites:', error);
     } finally {
@@ -99,6 +96,7 @@ export default function FavoritePage() {
           .eq('id_recipe', recipeId);
 
         if (!error) {
+          // Update state langsung agar UI responsif tanpa reload
           setFavorites(prev => prev.filter(r => r.id !== recipeId));
         }
       }
@@ -119,7 +117,10 @@ export default function FavoritePage() {
   if (loading) {
     return (
       <div className="min-h-screen pt-24 pb-12 px-4 flex justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#FE9412]"></div>
+        <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#FE9412] mx-auto mb-4"></div>
+            <p className="text-gray-500">Memuat favorit...</p>
+        </div>
       </div>
     );
   }
@@ -127,9 +128,18 @@ export default function FavoritePage() {
   return (
     <div className="min-h-screen pt-24 pb-12 px-4 bg-gray-50">
       <div className="max-w-7xl mx-auto">
-        <div className="flex items-center gap-3 mb-8">
-          <Heart className="w-8 h-8 text-[#FE9412] fill-current" />
-          <h1 className="text-3xl font-bold text-gray-900">Resep Favorit Saya</h1>
+        <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center gap-3">
+            <Heart className="w-8 h-8 text-[#FE9412] fill-current" />
+            <h1 className="text-3xl font-bold text-gray-900">Resep Favorit Saya</h1>
+          </div>
+          <button 
+            onClick={loadFavorites} 
+            className="p-2 text-gray-500 hover:text-[#FE9412] hover:bg-orange-50 rounded-full transition"
+            title="Refresh Data"
+          >
+            <RefreshCw className="w-5 h-5" />
+          </button>
         </div>
 
         {favorites.length === 0 ? (
@@ -163,7 +173,7 @@ export default function FavoritePage() {
                     alt={recipe.title}
                     fill
                     className="object-cover group-hover:scale-105 transition-transform duration-500"
-                    unoptimized={true} // FIX: Tambahkan ini agar gambar selalu muncul
+                    unoptimized={true} // FIX: Agar gambar selalu muncul
                   />
                   <button
                     onClick={(e) => removeFavorite(e, recipe.id)}
